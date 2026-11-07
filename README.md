@@ -82,8 +82,8 @@ Wayland, and X11. This build is not production ready.
 
 `packaging/build-deb.sh` builds the release binary and assembles
 `target/deb/diskatlas_<version>_<arch>.deb` with `dpkg-deb` (no debhelper needed).
-It installs the binary, `diskatlas.desktop`, AppStream metadata, a scalable icon and
-the copyright/changelog files. The maintainer comes from `DEBFULLNAME`/`DEBEMAIL`, or
+It installs the binary, `diskatlas.desktop`, AppStream metadata, a scalable icon, the
+man page (`man diskatlas`) and the copyright/changelog files. The maintainer comes from `DEBFULLNAME`/`DEBEMAIL`, or
 `git config user.name`/`user.email`. Install with `sudo apt install ./target/deb/*.deb`.
 
 The project is MIT licensed (see `LICENSE`; the package copyright file uses Debian's

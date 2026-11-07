@@ -1,0 +1,96 @@
+.TH DISKATLAS 1 "2026-11-07" "diskatlas 0.1.0" "User Commands"
+.SH NAME
+diskatlas \- show where disk space goes, as charts and lists
+.SH SYNOPSIS
+.B diskatlas
+.RI [ FOLDER ]
+.SH DESCRIPTION
+.B diskatlas
+is a graphical, read-only disk usage analyzer.
+It scans a folder or a whole volume and shows the result as a sunburst chart,
+a treemap, a folder listing and a list of the largest files.
+It never changes, moves or deletes anything.
+.PP
+If
+.I FOLDER
+is given, the scan starts immediately.
+Otherwise the window opens with the folder used last time, or the home directory,
+and a scan starts when you choose
+.BR Scan .
+.SS What a scan includes
+A scan stays within the filesystem that holds the starting folder.
+It does not enter other mounted filesystems, including bind mounts and pseudo\-filesystems
+such as
+.IR /proc ;
+those folders are listed as empty entries, and the status bar counts the folders skipped
+because they are on another device.
+Symbolic links are listed but never followed, except when the starting folder itself is a
+symbolic link.
+A file with several hard links is counted once.
+.PP
+Folders can be excluded from later scans, either by typing an absolute path under
+.B Excluded folders
+in the left panel, or with
+.B Exclude this folder
+in the details panel.
+Excluded folders are listed as empty entries.
+.PP
+Sizes are the sum of file lengths.
+Allocated size comes from filesystem blocks and may differ from the space a deletion would
+free, especially on filesystems that share data between files, such as Btrfs.
+Results are an estimate: files can change while a scan runs.
+.SS Interface
+The left panel lists mounted volumes with their capacity and has an
+.B Appearance
+section: theme (system, light, dark or high contrast), interface size, and an option to
+reduce motion.
+.B Ctrl+plus ,
+.B Ctrl+minus
+and
+.B Ctrl+0
+also change the interface size.
+.SH OPTIONS
+There are no command line options.
+The single argument is the folder to scan.
+.SH FILES
+.TP
+.I $XDG_CONFIG_HOME/diskatlas/settings.conf
+Saved settings, created with mode 0600.
+If
+.B XDG_CONFIG_HOME
+is unset or not an absolute path, the file is
+.IR ~/.config/diskatlas/settings.conf .
+It holds one
+.IR key = value
+pair per line:
+.BR view ,
+.BR theme ,
+.BR zoom ,
+.BR reduced_motion ,
+.BR window ,
+.B last_folder
+and one
+.B exclude
+line for each excluded folder.
+Lines that are not understood are ignored, so the file can be edited by hand.
+The window size is written when the program exits.
+.SH ENVIRONMENT
+.TP
+.B XDG_CONFIG_HOME
+Base directory for the settings file.
+.TP
+.B HOME
+Used to find the settings file and as the default folder to scan.
+.SH BUGS
+Report problems at
+.UR https://github.com/mikeholp87/disk-atlas/issues
+.UE .
+Scan progress shows only the number of entries found.
+Cancelling cannot interrupt a filesystem call that is already blocked.
+.SH AUTHOR
+Mike Holp.
+.SH LICENSE
+MIT.
+See
+.I /usr/share/doc/diskatlas/copyright
+for the full text.

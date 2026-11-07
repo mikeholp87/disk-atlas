@@ -34,6 +34,10 @@ install -D -m 0644 "$here/diskatlas.desktop" "$stage/usr/share/applications/disk
 install -D -m 0644 "$here/diskatlas.metainfo.xml" "$stage/usr/share/metainfo/diskatlas.metainfo.xml"
 install -D -m 0644 "$here/diskatlas.svg" "$stage/usr/share/icons/hicolor/scalable/apps/diskatlas.svg"
 install -D -m 0644 "$here/copyright" "$doc/copyright"
+# Debian policy: man pages are installed gzipped (-n keeps the build reproducible).
+install -d -m 0755 "$stage/usr/share/man/man1"
+gzip -9n -c "$here/diskatlas.1" >"$stage/usr/share/man/man1/diskatlas.1.gz"
+chmod 0644 "$stage/usr/share/man/man1/diskatlas.1.gz"
 
 # Reproducible when SOURCE_DATE_EPOCH is set.
 stamp=$(date -R -d "@${SOURCE_DATE_EPOCH:-$(date +%s)}")
@@ -45,7 +49,14 @@ printf '%s\n' \
 	" -- $maintainer  $stamp" | gzip -9n >"$doc/changelog.gz"
 chmod 0644 "$doc/changelog.gz"
 
-# Validate the desktop integration files when the tools are installed.
+# Validate the man page and the desktop integration files when the tools are installed.
+if command -v man >/dev/null; then
+	warnings=$(man --warnings -E UTF-8 -l "$here/diskatlas.1" 2>&1 >/dev/null || true)
+	if [[ -n $warnings ]]; then
+		echo "$warnings" >&2
+		exit 1
+	fi
+fi
 if command -v desktop-file-validate >/dev/null; then
 	desktop-file-validate "$here/diskatlas.desktop"
 fi
