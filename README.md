@@ -62,8 +62,7 @@ still exists) and the window size (written on exit) are saved to
 `$XDG_CONFIG_HOME/diskatlas/settings.conf` (default `~/.config`), together with the
 theme (system, light, dark, high contrast), the UI size (also Ctrl+plus, Ctrl+minus,
 Ctrl+0) and a reduce-motion option, all under Appearance in the left panel. Chart
-segment colours are the same in every theme, and there is no screen-reader support
-for the charts beyond the folder list. Pause/resume,
+segment colours are the same in every theme. Pause/resume,
 name-pattern exclusions, and unique-size accounting for reflinks and shared
 extents are unfinished; on Btrfs the app only warns that shared data, snapshots and
 compression make sizes approximate, and it does not enter nested subvolumes (this
@@ -102,3 +101,15 @@ Rust toolchain. The `package` job then builds the `.deb` on Ubuntu 24.04, runs `
 and uploads it as the `diskatlas-deb` artifact. Actions are pinned to commit SHAs. A
 package built there requires glibc 2.39 or newer, so it installs on older systems than
 one built on a bleeding-edge machine. The workflow has not been run on GitHub yet.
+
+## Keyboard and screen readers
+
+Tab and Shift+Tab move between controls. A focused chart takes the arrow keys (previous
+and next item), Home and End, Enter (open the selected folder) and Backspace (go up).
+In the folder list, focus selects a row and Enter opens a folder. Backspace or Alt+Up go
+to the parent folder from anywhere, and Ctrl+L focuses the folder field; these are ignored
+while a text field has focus. The UI exposes an AccessKit tree (names and roles for the
+charts and list rows) so assistive technology can read it. This is verified by tests of the
+generated tree and of the key handling, **not yet with a real screen reader such as Orca**,
+and the charts announce a summary rather than every segment. Enabling AccessKit adds about
+55 crates (the AT-SPI/zbus stack) and about 6 MB to an unstripped binary.

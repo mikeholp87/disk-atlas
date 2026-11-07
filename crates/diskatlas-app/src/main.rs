@@ -75,6 +75,8 @@ struct App {
     reduced_motion: bool,
     /// Theme and motion last pushed to egui; they are re-applied only when they change.
     applied_look: Option<(look::Theme, bool)>,
+    /// Id of the folder text field, so Ctrl+L can focus it.
+    path_field: Option<egui::Id>,
 }
 impl Default for App {
     fn default() -> Self {
@@ -114,6 +116,7 @@ impl Default for App {
             zoom: 100,
             reduced_motion: false,
             applied_look: None,
+            path_field: None,
         }
     }
 }
@@ -125,6 +128,18 @@ fn spawn_volumes() -> mpsc::Receiver<Vec<mounts::Volume>> {
         let _ = tx.send(mounts::volumes());
     });
     rx
+}
+
+/// Index in a list of `len` items after a keyboard step; none when the list is empty.
+/// With nothing selected, Next goes to the first item and Prev to the last.
+fn step_index(len: usize, current: Option<usize>, step: look::Step) -> Option<usize> {
+    let last = len.checked_sub(1)?;
+    Some(match (step, current) {
+        (look::Step::First, _) | (look::Step::Next, None) => 0,
+        (look::Step::Last, _) | (look::Step::Prev, None) => last,
+        (look::Step::Next, Some(i)) => (i + 1).min(last),
+        (look::Step::Prev, Some(i)) => i.saturating_sub(1),
+    })
 }
 
 impl App {
@@ -168,6 +183,30 @@ impl App {
             // Filter thread panicked: keep the previous matches.
             Some(Err(mpsc::TryRecvError::Disconnected)) => self.filter_rx = None,
             _ => {}
+        }
+    }
+
+    /// Global keys. They are ignored while a text field has focus, so typing is never hijacked.
+    fn shortcuts(&mut self, ctx: &egui::Context) {
+        use egui::{Key, Modifiers};
+        if ctx.text_edit_focused() {
+            return;
+        }
+        let (up, locate) = ctx.input_mut(|i| {
+            (
+                i.consume_key(Modifiers::NONE, Key::Backspace)
+                    || i.consume_key(Modifiers::ALT, Key::ArrowUp),
+                i.consume_key(Modifiers::COMMAND, Key::L),
+            )
+        });
+        if up
+            && let Some(scan) = self.result.as_deref()
+            && let Some(parent) = scan.nodes.get(self.root).and_then(|n| n.parent)
+        {
+            self.root = parent;
+        }
+        if let (true, Some(id)) = (locate, self.path_field) {
+            ctx.memory_mut(|m| m.request_focus(id));
         }
     }
 
@@ -387,6 +426,7 @@ impl App {
                     .desired_width(width.max(120.0))
                     .hint_text("Folder to scan"),
             );
+            self.path_field = Some(edit.id);
             let enter = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
             if scanning {
                 if ui.button("Cancel").clicked() {
@@ -633,7 +673,13 @@ impl App {
                     if r.clicked() {
                         self.selected = Some(id);
                     }
-                    if r.double_clicked() && n.directory {
+                    // Moving focus with the keyboard selects the row and keeps it in view.
+                    if r.gained_focus() {
+                        self.selected = Some(id);
+                        r.scroll_to_me(None);
+                    }
+                    let enter_key = r.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                    if (r.double_clicked() || enter_key) && n.directory {
                         enter = Some(id);
                     }
                     if r.hovered() {
@@ -788,6 +834,20 @@ impl App {
             }
             look::Event::Select(id) => self.selected = Some(id),
             look::Event::Up => self.root = scan.nodes[self.root].parent.unwrap_or(self.root),
+            look::Event::Step(step) => {
+                let current = self
+                    .selected
+                    .and_then(|id| self.listing.iter().position(|&x| x == id));
+                if let Some(next) = step_index(self.listing.len(), current, step) {
+                    self.selected = Some(self.listing[next]);
+                }
+            }
+            look::Event::Open => {
+                if let Some(id) = self.selected.filter(|&id| scan.nodes[id].directory) {
+                    self.root = id;
+                    self.selected = None;
+                }
+            }
             look::Event::None => {}
         }
     }
@@ -797,6 +857,7 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.poll();
         let ctx = ui.ctx().clone();
+        self.shortcuts(&ctx);
         if self.applied_look != Some((self.theme, self.reduced_motion)) {
             look::set_theme(&ctx, self.theme);
             look::set_motion(&ctx, self.reduced_motion);
@@ -884,6 +945,23 @@ fn main() -> eframe::Result {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn keyboard_steps_stay_in_range() {
+        use look::Step::*;
+        assert_eq!(step_index(0, None, Next), None, "empty list");
+        assert_eq!(step_index(3, None, Next), Some(0));
+        assert_eq!(step_index(3, None, Prev), Some(2));
+        assert_eq!(
+            step_index(3, Some(0), Prev),
+            Some(0),
+            "clamped at the start"
+        );
+        assert_eq!(step_index(3, Some(2), Next), Some(2), "clamped at the end");
+        assert_eq!(step_index(3, Some(1), Next), Some(2));
+        assert_eq!(step_index(3, Some(1), First), Some(0));
+        assert_eq!(step_index(3, Some(1), Last), Some(2));
+    }
 
     #[test]
     fn exclusions_are_absolute_and_deduplicated() {

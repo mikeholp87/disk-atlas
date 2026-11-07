@@ -18,6 +18,72 @@ pub enum Event {
     Enter(usize),
     Select(usize),
     Up,
+    /// Keyboard: move the selection within the open folder.
+    Step(Step),
+    /// Keyboard: open the selected folder.
+    Open,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Step {
+    Next,
+    Prev,
+    First,
+    Last,
+}
+
+/// Accessibility and keyboard handling shared by both charts. The painted chart is one
+/// focusable widget: it gets an accessible name, a focus ring, and, while focused, the arrow
+/// keys (which egui would otherwise use to move focus away).
+fn chart_access(ui: &Ui, response: &egui::Response, label: String) -> Event {
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::GraphicsDocument, true, &label));
+    if !response.has_focus() {
+        return Event::None;
+    }
+    ui.memory_mut(|m| {
+        m.set_focus_lock_filter(
+            response.id,
+            egui::EventFilter {
+                horizontal_arrows: true,
+                vertical_arrows: true,
+                ..Default::default()
+            },
+        );
+    });
+    ui.painter().rect_stroke(
+        response.rect.shrink(1.0),
+        3.0,
+        Stroke::new(2.0, ui.visuals().selection.stroke.color),
+        egui::StrokeKind::Inside,
+    );
+    use egui::{Key, Modifiers};
+    ui.input_mut(|i| {
+        let mut pressed = |key| i.consume_key(Modifiers::NONE, key);
+        if pressed(Key::ArrowDown) || pressed(Key::ArrowRight) {
+            Event::Step(Step::Next)
+        } else if pressed(Key::ArrowUp) || pressed(Key::ArrowLeft) {
+            Event::Step(Step::Prev)
+        } else if pressed(Key::Home) {
+            Event::Step(Step::First)
+        } else if pressed(Key::End) {
+            Event::Step(Step::Last)
+        } else if pressed(Key::Enter) {
+            Event::Open
+        } else if pressed(Key::Backspace) {
+            Event::Up
+        } else {
+            Event::None
+        }
+    })
+}
+
+fn chart_label(kind: &str, scan: &Scan, root: usize) -> String {
+    format!(
+        "{kind} chart of {}, {} in total. Arrow keys select an item, Enter opens a folder, \
+         Backspace goes up.",
+        name(scan, root),
+        size(scan.nodes[root].apparent)
+    )
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
@@ -349,6 +415,7 @@ pub fn sunburst(
 ) -> (Option<usize>, Event) {
     let rect = ui.available_rect_before_wrap();
     let response = ui.allocate_rect(rect, Sense::click());
+    let key_event = chart_access(ui, &response, chart_label("Sunburst", scan, root));
     let painter = ui.painter_at(rect);
     let whole = scan.nodes[root].apparent;
     let visible = segs.iter().map(|s| s.depth + 1).max().unwrap_or(1);
@@ -490,6 +557,12 @@ pub fn sunburst(
             _ => Event::None,
         }
     };
+    // A pointer action wins over a key pressed in the same frame.
+    let event = if matches!(event, Event::None) {
+        key_event
+    } else {
+        event
+    };
     (id.filter(|_| group.is_none()), event)
 }
 
@@ -504,6 +577,7 @@ pub fn treemap(
 ) -> (Option<usize>, Event) {
     let rect = ui.available_rect_before_wrap().shrink(4.0);
     let response = ui.allocate_rect(rect, Sense::click());
+    let key_event = chart_access(ui, &response, chart_label("Treemap", scan, root));
     let painter = ui.painter_at(rect);
     let whole = scan.nodes[root].apparent;
     let place = |t: &Tile| {
@@ -572,7 +646,7 @@ pub fn treemap(
                 Event::Select(id)
             }
         }
-        _ => Event::None,
+        _ => key_event,
     };
     (hovered, event)
 }
@@ -587,6 +661,18 @@ pub fn row(
     selected: bool,
 ) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 24.0), Sense::click());
+    response.widget_info(|| {
+        egui::WidgetInfo::selected(
+            egui::Role::ListBoxOption,
+            true,
+            selected,
+            format!(
+                "{label}, {}, {:.1}% of folder",
+                size(bytes),
+                fraction.clamp(0.0, 1.0) * 100.0
+            ),
+        )
+    });
     let p = ui.painter_at(rect);
     let v = ui.visuals();
     if selected {
@@ -599,6 +685,14 @@ pub fn row(
         vec2(rect.width() * fraction.clamp(0.0, 1.0), 2.0),
     );
     p.rect_filled(bar, 1.0, swatch.unwrap_or(ACCENT).gamma_multiply(0.8));
+    if response.has_focus() {
+        p.rect_stroke(
+            rect.shrink(1.0),
+            3.0,
+            Stroke::new(2.0, v.selection.stroke.color),
+            egui::StrokeKind::Inside,
+        );
+    }
     let mut x = rect.left() + 8.0;
     if let Some(c) = swatch {
         p.rect_filled(
@@ -706,5 +800,152 @@ mod tests {
         assert_eq!(ctx.style_of(egui::Theme::Light).animation_time, 0.0);
         set_motion(&ctx, false);
         assert!(ctx.style_of(egui::Theme::Light).animation_time > 0.0);
+    }
+
+    // --- accessibility and keyboard ---
+
+    use diskatlas_scanner::Node;
+
+    /// root(30) -> a.bin(20), b.bin(10)
+    fn tiny_scan() -> Scan {
+        let node = |name: &str, parent, directory, size| Node {
+            name: name.into(),
+            parent,
+            directory,
+            regular_file: !directory,
+            apparent: size,
+            allocated: size,
+        };
+        Scan {
+            nodes: vec![
+                node("root", None, true, 30),
+                node("a.bin", Some(0), false, 20),
+                node("b.bin", Some(0), false, 10),
+            ],
+            ..Scan::default()
+        }
+    }
+
+    fn frame(
+        ctx: &egui::Context,
+        events: Vec<egui::Event>,
+        run: impl FnMut(&mut Ui),
+    ) -> egui::FullOutput {
+        let screen = Rect::from_min_size(Pos2::ZERO, vec2(600.0, 500.0));
+        let raw = egui::RawInput {
+            screen_rect: Some(screen),
+            events,
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(raw, run);
+        out.textures_delta.clear(); // nothing renders these; egui panics if they are dropped unapplied
+        out
+    }
+
+    fn key(key: egui::Key) -> egui::Event {
+        egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        }
+    }
+
+    #[test]
+    fn screen_readers_get_named_chart_and_rows() {
+        let scan = tiny_scan();
+        let children = crate::chart::index(&scan);
+        let segs = crate::chart::layout(&scan, &children, 0, 2);
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let out = frame(&ctx, vec![], |ui| {
+            sunburst(ui, &scan, 0, &segs, None, None);
+        });
+        let update = out
+            .platform_output
+            .accesskit_update
+            .expect("accesskit tree");
+        let chart = update
+            .nodes
+            .iter()
+            .find(|(_, n)| n.role() == egui::Role::GraphicsDocument)
+            .expect("chart node");
+        let label = chart.1.label().unwrap();
+        assert!(
+            label.starts_with("Sunburst chart of root, 30 B in total"),
+            "{label}"
+        );
+        assert!(label.contains("Arrow keys"), "{label}");
+
+        let out = frame(&ctx, vec![], |ui| {
+            row(ui, "a.bin", 2048, 0.5, None, true);
+        });
+        let update = out.platform_output.accesskit_update.unwrap();
+        let row_node = update
+            .nodes
+            .iter()
+            .find(|(_, n)| n.role() == egui::Role::ListBoxOption)
+            .expect("row node");
+        assert_eq!(row_node.1.label(), Some("a.bin, 2.0 KiB, 50.0% of folder"));
+    }
+
+    #[test]
+    fn focused_chart_turns_keys_into_navigation_events() {
+        let scan = tiny_scan();
+        let children = crate::chart::index(&scan);
+        let segs = crate::chart::layout(&scan, &children, 0, 2);
+        let ctx = egui::Context::default();
+        let run = |ctx: &egui::Context, events: Vec<egui::Event>, focus: bool| {
+            let mut got = Event::None;
+            frame(ctx, events, |ui| {
+                if focus {
+                    let id = ui.next_auto_id();
+                    ui.memory_mut(|m| m.request_focus(id));
+                }
+                got = sunburst(ui, &scan, 0, &segs, None, None).1;
+                // Another focusable widget, so that unlocked arrow keys would move focus to it.
+                ui.add(egui::Button::new("neighbour"));
+            });
+            got
+        };
+        // Without focus, keys do nothing.
+        assert!(matches!(
+            run(&ctx, vec![key(egui::Key::ArrowDown)], false),
+            Event::None
+        ));
+        run(&ctx, vec![], true); // give the chart focus
+        run(&ctx, vec![], false); // frame in which it installs its arrow-key lock
+        for (k, expect) in [
+            (egui::Key::ArrowDown, Some(Step::Next)),
+            (egui::Key::ArrowRight, Some(Step::Next)),
+            (egui::Key::ArrowUp, Some(Step::Prev)),
+            (egui::Key::Home, Some(Step::First)),
+            (egui::Key::End, Some(Step::Last)),
+        ] {
+            match (run(&ctx, vec![key(k)], false), expect) {
+                (Event::Step(got), Some(want)) => assert_eq!(got, want, "{k:?}"),
+                (other, _) => panic!("{k:?} gave {}", name_of(&other)),
+            }
+        }
+        assert!(matches!(
+            run(&ctx, vec![key(egui::Key::Enter)], false),
+            Event::Open
+        ));
+        assert!(matches!(
+            run(&ctx, vec![key(egui::Key::Backspace)], false),
+            Event::Up
+        ));
+    }
+
+    fn name_of(e: &Event) -> &'static str {
+        match e {
+            Event::None => "None",
+            Event::Enter(_) => "Enter",
+            Event::Select(_) => "Select",
+            Event::Up => "Up",
+            Event::Step(_) => "Step",
+            Event::Open => "Open",
+        }
     }
 }
