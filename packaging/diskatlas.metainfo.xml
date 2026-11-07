@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>diskatlas</id>
+  <name>Disk Atlas</name>
+  <summary>See where your disk space goes</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <url type="homepage">https://github.com/mikeholp87/disk-atlas</url>
+  <url type="vcs-browser">https://github.com/mikeholp87/disk-atlas</url>
+  <url type="bugtracker">https://github.com/mikeholp87/disk-atlas/issues</url>
+  <description>
+    <p>
+      Disk Atlas scans a folder or a whole volume and shows its contents as a
+      sunburst chart, a treemap, a folder listing and a list of the largest files.
+      It is read-only: it never changes or deletes anything.
+    </p>
+    <ul>
+      <li>Mounted volumes with capacity, in a side panel</li>
+      <li>Exclude folders from a scan; exclusions are remembered</li>
+      <li>Stays inside one filesystem and never follows symbolic links</li>
+      <li>Light, dark and high-contrast themes, adjustable size, reduced motion</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">diskatlas.desktop</launchable>
+  <provides>
+    <binary>diskatlas</binary>
+  </provides>
+  <categories>
+    <category>System</category>
+    <category>Filesystem</category>
+  </categories>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-11-07">
+      <description>
+        <p>First development release: read-only scanning, charts, volumes and settings.</p>
+      </description>
+    </release>
+  </releases>
+</component>

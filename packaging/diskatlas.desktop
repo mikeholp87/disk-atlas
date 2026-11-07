@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Disk Atlas
+GenericName=Disk Usage Analyzer
+Comment=See where your disk space goes
+Exec=diskatlas %f
+Icon=diskatlas
+Terminal=false
+Categories=System;Filesystem;
+Keywords=disk;usage;space;storage;analyzer;largest;files;
+StartupWMClass=diskatlas

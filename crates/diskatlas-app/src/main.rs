@@ -1,6 +1,8 @@
-use diskatlas_scanner::Scan;
+use diskatlas_scanner::{Scan, mounts};
 mod analysis;
 mod chart;
+mod look;
+mod settings;
 use eframe::egui;
 use std::{
     path::PathBuf,
@@ -13,7 +15,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[derive(Default, PartialEq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 enum View {
     #[default]
     Sunburst,
@@ -23,33 +25,56 @@ enum View {
 }
 
 struct CompletedScan {
-    scan: Scan,
+    scan: Arc<Scan>,
     children: Vec<Vec<usize>>,
-    largest: analysis::LargestFiles,
+    largest: Arc<analysis::LargestFiles>,
     root_path: PathBuf,
 }
 
 struct App {
     path: String,
-    result: Option<Scan>,
+    result: Option<Arc<Scan>>,
     receiver: Option<mpsc::Receiver<CompletedScan>>,
     cancel: Arc<AtomicBool>,
     progress: Arc<AtomicUsize>,
     root: usize,
     selected: Option<usize>,
+    /// Node under the pointer last frame, in either the chart or a list.
+    hover: Option<usize>,
     children: Vec<Vec<usize>>,
     chart_root: Option<usize>,
     segments: Vec<chart::Segment>,
     tiles: Vec<chart::Tile>,
+    /// Children of the open folder, largest first.
+    listing: Vec<usize>,
     view: View,
     root_path: PathBuf,
-    largest: analysis::LargestFiles,
+    largest: Arc<analysis::LargestFiles>,
     matches: Vec<usize>,
+    // Result of the in-flight filter; replacing it discards any older job's result.
+    filter_rx: Option<mpsc::Receiver<Vec<usize>>>,
     search: String,
     minimum_bytes: u64,
     allocated_order: bool,
     filter_due: Option<Instant>,
+    show_errors: bool,
     error: Option<String>,
+    volumes: Vec<mounts::Volume>,
+    volumes_rx: Option<mpsc::Receiver<Vec<mounts::Volume>>>,
+    /// Folders the next scan lists as empty leaves instead of entering. Session-only.
+    exclusions: Vec<PathBuf>,
+    exclude_input: String,
+    /// What is currently on disk, so we only write when something changed.
+    saved_settings: settings::Settings,
+    last_folder: Option<String>,
+    /// Last inner size while not maximized or fullscreen; written to disk on exit.
+    window_size: Option<(u32, u32)>,
+    theme: look::Theme,
+    /// Mirror of egui's zoom factor in percent, so keyboard zoom (Ctrl +/-/0) is saved too.
+    zoom: u32,
+    reduced_motion: bool,
+    /// Theme and motion last pushed to egui; they are re-applied only when they change.
+    applied_look: Option<(look::Theme, bool)>,
 }
 impl Default for App {
     fn default() -> Self {
@@ -61,24 +86,58 @@ impl Default for App {
             progress: Arc::new(AtomicUsize::new(0)),
             root: 0,
             selected: None,
+            hover: None,
             children: Vec::new(),
             chart_root: None,
             segments: Vec::new(),
             tiles: Vec::new(),
+            listing: Vec::new(),
             view: View::default(),
             root_path: PathBuf::new(),
-            largest: analysis::LargestFiles::default(),
+            largest: Arc::default(),
             matches: Vec::new(),
+            filter_rx: None,
             search: String::new(),
             minimum_bytes: 0,
             allocated_order: false,
             filter_due: None,
+            show_errors: false,
             error: None,
+            volumes: Vec::new(),
+            volumes_rx: Some(spawn_volumes()),
+            exclusions: Vec::new(),
+            exclude_input: String::new(),
+            saved_settings: settings::Settings::default(),
+            last_folder: None,
+            window_size: None,
+            theme: look::Theme::default(),
+            zoom: 100,
+            reduced_motion: false,
+            applied_look: None,
         }
     }
 }
-impl eframe::App for App {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+
+/// `statvfs` can block on a dead network mount, so volumes are read off the UI thread.
+fn spawn_volumes() -> mpsc::Receiver<Vec<mounts::Volume>> {
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let _ = tx.send(mounts::volumes());
+    });
+    rx
+}
+
+impl App {
+    fn poll(&mut self) {
+        match self.volumes_rx.as_ref().map(|rx| rx.try_recv()) {
+            Some(Ok(volumes)) => {
+                self.volumes = volumes;
+                self.volumes_rx = None;
+            }
+            // Reader thread panicked: keep the previous list.
+            Some(Err(mpsc::TryRecvError::Disconnected)) => self.volumes_rx = None,
+            _ => {}
+        }
         match self.receiver.as_ref().map(|rx| rx.try_recv()) {
             Some(Ok(completed)) => {
                 self.result = Some(completed.scan);
@@ -86,10 +145,12 @@ impl eframe::App for App {
                 self.largest = completed.largest;
                 self.root_path = completed.root_path;
                 self.matches.clear();
+                self.filter_rx = None; // stale ids from the previous scan
                 self.filter_due = Some(Instant::now());
                 self.chart_root = None;
                 self.root = 0;
                 self.selected = None;
+                self.hover = None;
                 self.receiver = None;
             }
             // Sender dropped without a result: the worker panicked.
@@ -99,294 +160,739 @@ impl eframe::App for App {
             }
             _ => {}
         }
-        egui::CentralPanel::default().show(ui, |ui| {
-            ui.heading("Disk Atlas");
-            ui.horizontal(|ui| {
-                ui.label("Directory");
-                ui.text_edit_singleline(&mut self.path);
-                if self.receiver.is_none() && ui.button("Scan").clicked() {
-                    self.error = None;
-                    let path = PathBuf::from(&self.path);
-                    let cancel = Arc::new(AtomicBool::new(false));
-                    self.cancel = cancel.clone();
-                    let progress = Arc::new(AtomicUsize::new(0));
-                    self.progress = progress.clone();
-                    let (tx, rx) = mpsc::channel();
-                    self.receiver = Some(rx);
-                    thread::spawn(move || {
-                        let scan = diskatlas_scanner::scan_with_progress(&path, &cancel, &progress);
-                        let children = chart::index(&scan);
-                        let largest = analysis::LargestFiles::new(&scan);
-                        let _ = tx.send(CompletedScan { scan, children, largest, root_path: path });
+        match self.filter_rx.as_ref().map(|rx| rx.try_recv()) {
+            Some(Ok(matches)) => {
+                self.matches = matches;
+                self.filter_rx = None;
+            }
+            // Filter thread panicked: keep the previous matches.
+            Some(Err(mpsc::TryRecvError::Disconnected)) => self.filter_rx = None,
+            _ => {}
+        }
+    }
+
+    fn from_settings(saved: settings::Settings) -> Self {
+        let default = Self::default();
+        // Reopen the last folder only if it still exists; otherwise keep the default.
+        let path = saved
+            .last_folder
+            .clone()
+            .filter(|d| std::path::Path::new(d).is_dir())
+            .unwrap_or_else(|| default.path.clone());
+        Self {
+            path,
+            view: saved.view,
+            exclusions: saved.exclusions.clone(),
+            last_folder: saved.last_folder.clone(),
+            theme: saved.theme,
+            zoom: saved.zoom,
+            reduced_motion: saved.reduced_motion,
+            saved_settings: saved,
+            ..default
+        }
+    }
+
+    /// The window size is carried over from disk here: it changes every frame of a resize, so
+    /// it is only written on exit (see `on_exit`).
+    fn current_settings(&self) -> settings::Settings {
+        settings::Settings {
+            view: self.view,
+            exclusions: self.exclusions.clone(),
+            last_folder: self.last_folder.clone(),
+            window: self.saved_settings.window,
+            theme: self.theme,
+            zoom: self.zoom,
+            reduced_motion: self.reduced_motion,
+        }
+    }
+
+    fn persist_settings(&mut self) {
+        let now = self.current_settings();
+        if now != self.saved_settings {
+            if let Err(e) = settings::save(&now) {
+                self.error = Some(format!("Could not save settings: {e}"));
+            }
+            // Also after a failure: retrying every frame would spam the error and the disk.
+            self.saved_settings = now;
+        }
+    }
+
+    fn add_exclusion(&mut self) {
+        self.push_exclusion(PathBuf::from(self.exclude_input.trim()));
+        self.exclude_input.clear();
+    }
+
+    /// Rebuilding from components drops a trailing slash, so "/a/b/" equals "/a/b".
+    fn push_exclusion(&mut self, path: PathBuf) {
+        let path: PathBuf = path.components().collect();
+        if !path.is_absolute() {
+            self.error = Some("Excluded folder must be an absolute path.".into());
+        } else if !self.exclusions.contains(&path) {
+            self.exclusions.push(path);
+        }
+    }
+
+    fn exclusions_ui(&mut self, ui: &mut egui::Ui) {
+        egui::CollapsingHeader::new(format!("Excluded folders ({})", self.exclusions.len()))
+            .id_salt("exclusions")
+            .show(ui, |ui| {
+                ui.small("Skipped by the next scan and shown as empty folders.");
+                let mut remove = None;
+                for (i, path) in self.exclusions.iter().enumerate() {
+                    ui.horizontal(|ui| {
+                        if ui.small_button("Remove").clicked() {
+                            remove = Some(i);
+                        }
+                        ui.label(path.to_string_lossy());
                     });
                 }
-                if self.receiver.is_some() && ui.button("Cancel").clicked() {
-                    self.cancel.store(true, Ordering::Relaxed);
+                if let Some(i) = remove {
+                    self.exclusions.remove(i);
+                }
+                ui.horizontal(|ui| {
+                    let edit = ui.add(
+                        egui::TextEdit::singleline(&mut self.exclude_input)
+                            .hint_text("/absolute/path"),
+                    );
+                    let enter = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                    if ui.button("Add").clicked() || enter {
+                        self.add_exclusion();
+                    }
+                });
+            });
+    }
+
+    fn appearance_ui(&mut self, ui: &mut egui::Ui) {
+        egui::CollapsingHeader::new("Appearance")
+            .id_salt("appearance")
+            .show(ui, |ui| {
+                egui::ComboBox::from_label("Theme")
+                    .selected_text(self.theme.label())
+                    .show_ui(ui, |ui| {
+                        for theme in look::Theme::ALL {
+                            ui.selectable_value(&mut self.theme, theme, theme.label());
+                        }
+                    });
+                // A combo box rather than a slider: resizing the UI under a dragged slider jitters.
+                egui::ComboBox::from_label("Size")
+                    .selected_text(format!("{}%", self.zoom))
+                    .show_ui(ui, |ui| {
+                        for percent in [75, 100, 125, 150, 175, 200, 250] {
+                            if ui
+                                .selectable_label(self.zoom == percent, format!("{percent}%"))
+                                .clicked()
+                            {
+                                ui.ctx().set_zoom_factor(percent as f32 / 100.0);
+                            }
+                        }
+                    });
+                ui.checkbox(&mut self.reduced_motion, "Reduce motion")
+                    .on_hover_text("No animations or spinners.");
+                ui.small("Ctrl+plus, Ctrl+minus and Ctrl+0 also change the size.");
+            });
+    }
+
+    fn volumes_panel(&mut self, ui: &mut egui::Ui) {
+        self.appearance_ui(ui);
+        self.exclusions_ui(ui);
+        ui.separator();
+        let mut scan_mount = None;
+        ui.horizontal(|ui| {
+            ui.heading("Volumes");
+            if self.volumes_rx.is_none() && ui.button("Refresh").clicked() {
+                self.volumes_rx = Some(spawn_volumes());
+            }
+        });
+        if self.volumes_rx.is_some() {
+            ui.label("Reading mounts…");
+            ui.ctx().request_repaint_after(Duration::from_millis(100));
+        }
+        egui::ScrollArea::vertical()
+            .id_salt("volumes")
+            .show(ui, |ui| {
+                for v in &self.volumes {
+                    let c = v.capacity;
+                    ui.separator();
+                    ui.label(egui::RichText::new(v.mount.mount_point.to_string_lossy()).strong());
+                    ui.small(format!(
+                        "{} · {}",
+                        v.mount.fs_type,
+                        v.mount.source.to_string_lossy()
+                    ));
+                    ui.add(
+                        egui::ProgressBar::new((c.used() as f64 / c.total as f64) as f32).text(
+                            format!("{} used of {}", look::size(c.used()), look::size(c.total)),
+                        ),
+                    );
+                    ui.small(format!("{} available", look::size(c.available)));
+                    if v.mount.fs_type == "btrfs" {
+                        ui.small("Btrfs: free space is an estimate")
+                            .on_hover_text("Metadata, RAID profiles and snapshots make Btrfs free space approximate.");
+                    }
+                    if self.receiver.is_none() && ui.small_button("Scan this volume").clicked() {
+                        scan_mount = Some(v.mount.mount_point.clone());
+                    }
                 }
             });
-            if let Some(error) = &self.error {
-                ui.colored_label(ui.visuals().error_fg_color, error);
+        if let Some(mount_point) = scan_mount {
+            // ponytail: the path box is a UTF-8 String, so a non-UTF-8 mount point is mangled here.
+            self.path = mount_point.to_string_lossy().into_owned();
+            self.start_scan();
+        }
+    }
+
+    fn start_scan(&mut self) {
+        self.error = None;
+        let path = PathBuf::from(&self.path);
+        // Stored absolute so a relative entry such as `.` still means the same folder next run.
+        self.last_folder = std::path::absolute(&path)
+            .ok()
+            .and_then(|p| p.to_str().map(String::from));
+        let cancel = Arc::new(AtomicBool::new(false));
+        self.cancel = cancel.clone();
+        let progress = Arc::new(AtomicUsize::new(0));
+        self.progress = progress.clone();
+        let exclude = self.exclusions.clone();
+        let (tx, rx) = mpsc::channel();
+        self.receiver = Some(rx);
+        thread::spawn(move || {
+            let scan = Arc::new(diskatlas_scanner::scan_with_progress(
+                &path, &cancel, &progress, &exclude,
+            ));
+            let children = chart::index(&scan);
+            let largest = Arc::new(analysis::LargestFiles::new(&scan));
+            let _ = tx.send(CompletedScan {
+                scan,
+                children,
+                largest,
+                root_path: path,
+            });
+        });
+    }
+
+    fn toolbar(&mut self, ui: &mut egui::Ui, scan: Option<&Scan>) {
+        ui.add_space(2.0);
+        ui.horizontal(|ui| {
+            let parent = scan.and_then(|s| s.nodes.get(self.root)?.parent);
+            if ui
+                .add_enabled(parent.is_some(), egui::Button::new("Up"))
+                .clicked()
+            {
+                self.root = parent.unwrap_or(self.root);
             }
+            let scanning = self.receiver.is_some();
+            let width = ui.available_width() - if scanning { 80.0 } else { 70.0 };
+            let edit = ui.add(
+                egui::TextEdit::singleline(&mut self.path)
+                    .desired_width(width.max(120.0))
+                    .hint_text("Folder to scan"),
+            );
+            let enter = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+            if scanning {
+                if ui.button("Cancel").clicked() {
+                    self.cancel.store(true, Ordering::Relaxed);
+                }
+            } else if ui.button("Scan").clicked() || enter {
+                self.start_scan();
+            }
+        });
+        if let Some(error) = &self.error {
+            ui.colored_label(ui.visuals().error_fg_color, error);
+        }
+        let Some(scan) = scan.filter(|s| !s.nodes.is_empty()) else {
+            ui.add_space(2.0);
+            return;
+        };
+        ui.horizontal(|ui| {
+            let mut ancestors = Vec::new();
+            let mut current = Some(self.root);
+            while let Some(id) = current {
+                ancestors.push(id);
+                current = scan.nodes[id].parent;
+            }
+            ancestors.reverse();
+            let last = ancestors.len() - 1;
+            for (i, id) in ancestors.into_iter().enumerate() {
+                let label = scan.nodes[id].name.to_string_lossy();
+                let label = if label.is_empty() { "/".into() } else { label };
+                let text = if i == last {
+                    egui::RichText::new(label).strong()
+                } else {
+                    label.into()
+                };
+                if ui.add(egui::Button::new(text).frame(false)).clicked() {
+                    self.root = id;
+                }
+                if i != last {
+                    ui.weak("›");
+                }
+            }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.selectable_value(&mut self.view, View::LargestFiles, "Largest files");
+                ui.selectable_value(&mut self.view, View::Directory, "Directory");
+                ui.selectable_value(&mut self.view, View::Treemap, "Treemap");
+                ui.selectable_value(&mut self.view, View::Sunburst, "Sunburst");
+            });
+        });
+        ui.add_space(2.0);
+    }
+
+    fn status(&mut self, ui: &mut egui::Ui, scan: Option<&Scan>) {
+        ui.horizontal(|ui| {
             if self.receiver.is_some() {
-                ui.spinner();
+                if !self.reduced_motion {
+                    ui.spinner();
+                }
                 ui.label(format!(
                     "Scanning… {} entries",
                     self.progress.load(Ordering::Relaxed)
                 ));
-                ui.ctx()
-                    .request_repaint_after(std::time::Duration::from_millis(150));
-            }
-            if let Some(scan) = &self.result {
+                ui.ctx().request_repaint_after(Duration::from_millis(150));
+            } else if let Some(scan) = scan.filter(|s| !s.nodes.is_empty()) {
+                let n = &scan.nodes[self.root];
                 ui.label(format!(
-                    "{} entries · {} errors · {} extra hard links not counted{}",
-                    scan.nodes.len(),
-                    scan.errors.len(),
-                    scan.hard_links_skipped,
-                    if scan.cancelled { " · cancelled" } else { "" }
+                    "{} in this folder · {} entries scanned",
+                    look::size(n.apparent),
+                    scan.nodes.len()
                 ));
-                ui.label("Allocated space is an estimate and may not equal recoverable space.");
-                if !scan.errors.is_empty() {
-                    ui.collapsing("Scan errors (paths may contain private information)", |ui| {
-                        egui::ScrollArea::vertical().id_salt("errors").max_height(120.0).show_rows(ui, 20.0, scan.errors.len(), |ui, rows| {
-                            for row in rows { ui.label(&scan.errors[row]); }
-                        });
-                    });
+                if scan.cancelled {
+                    ui.label("Scan cancelled; results are partial.");
                 }
-                if !scan.nodes.is_empty() {
-                    ui.horizontal(|ui| {
-                        if ui.button("Up").clicked() {
-                            self.root = scan.nodes[self.root].parent.unwrap_or(self.root);
-                        }
-                        let mut ancestors = Vec::new();
-                        let mut current = Some(self.root);
-                        while let Some(id) = current {
-                            ancestors.push(id);
-                            current = scan.nodes[id].parent;
-                        }
-                        ancestors.reverse();
-                        for id in ancestors {
-                            if ui.button(scan.nodes[id].name.to_string_lossy()).clicked() {
-                                self.root = id;
-                            }
-                            ui.label("/");
-                        }
-                    });
-                    ui.horizontal(|ui| {
-                        ui.selectable_value(&mut self.view, View::Sunburst, "Sunburst");
-                        ui.selectable_value(&mut self.view, View::Treemap, "Treemap");
-                        ui.selectable_value(&mut self.view, View::Directory, "Directory");
-                        ui.selectable_value(&mut self.view, View::LargestFiles, "Largest Files");
-                    });
-                    if matches!(self.view, View::Sunburst | View::Treemap) && self.chart_root != Some(self.root) {
-                        self.segments = chart::layout(scan, &self.children, self.root, 3);
-                        self.tiles = chart::treemap(scan, &self.children[self.root]);
-                        self.chart_root = Some(self.root);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if !scan.errors.is_empty()
+                        && ui.button(format!("{} errors", scan.errors.len())).clicked()
+                    {
+                        self.show_errors = true;
                     }
-                    if self.view == View::Treemap {
-                        let height = (ui.available_height() * 0.55).clamp(80.0, 360.0);
-                        let (response, painter) = ui.allocate_painter(
-                            egui::vec2(ui.available_width(), height),
-                            egui::Sense::click(),
+                    if scan.other_device_skipped > 0 {
+                        ui.weak(format!(
+                            "{} folders on other filesystems not entered",
+                            scan.other_device_skipped
+                        ))
+                        .on_hover_text(
+                            "Mounted volumes and, on Btrfs, nested subvolumes. Scan them separately.",
                         );
-                        for tile in &self.tiles {
-                            let rect = egui::Rect::from_min_max(
-                                response.rect.min
-                                    + response.rect.size()
-                                        * egui::vec2(tile.min[0] as f32, tile.min[1] as f32),
-                                response.rect.min
-                                    + response.rect.size()
-                                        * egui::vec2(tile.max[0] as f32, tile.max[1] as f32),
-                            );
-                            painter.rect_filled(rect, 0.0, node_color(tile.id));
-                            painter.rect_stroke(
-                                rect,
-                                0.0,
-                                egui::Stroke::new(
-                                    if self.selected == Some(tile.id) {
-                                        3.0
-                                    } else {
-                                        1.0
-                                    },
-                                    if self.selected == Some(tile.id) {
-                                        egui::Color32::WHITE
-                                    } else {
-                                        ui.visuals().panel_fill
-                                    },
-                                ),
-                                egui::StrokeKind::Inside,
-                            );
-                            let n = &scan.nodes[tile.id];
-                            if rect.width() > 90.0 && rect.height() > 24.0 {
-                                painter.with_clip_rect(rect.shrink(3.0)).text(
-                                    rect.center(),
-                                    egui::Align2::CENTER_CENTER,
-                                    n.name.to_string_lossy(),
-                                    egui::FontId::proportional(14.0),
-                                    egui::Color32::BLACK,
-                                );
-                            }
-                            if response.hover_pos().is_some_and(|p| rect.contains(p)) {
-                                response.clone().on_hover_text(format!(
-                                    "{} · {} bytes",
-                                    n.name.to_string_lossy(),
-                                    n.apparent
-                                ));
-                                if response.clicked() {
-                                    self.selected = Some(tile.id);
-                                }
-                                if response.double_clicked() && n.directory {
-                                    self.root = tile.id;
-                                }
-                            }
-                        }
-                        if self.tiles.is_empty() {
-                            ui.label("No nonzero entries; use the directory list below.");
-                        }
                     }
-                    if self.view == View::Sunburst {
-                        let size = ui
-                            .available_width()
-                            .min((ui.available_height() * 0.6).clamp(80.0, 360.0));
-                        let (response, painter) =
-                            ui.allocate_painter(egui::vec2(size, size), egui::Sense::click());
-                        let center = response.rect.center();
-                        let ring = size / 8.0;
-                        let pointer = response.hover_pos().map(|p| p - center);
-                        for segment in &self.segments {
-                            let inner = ring * (segment.depth as f32 + 1.0);
-                            let outer = inner + ring;
-                            let steps =
-                                (((segment.end - segment.start) * 24.0).ceil() as usize).max(1);
-                            let mut mesh = egui::Mesh::default();
-                            let color = if self.selected == Some(segment.id) {
-                                egui::Color32::WHITE
-                            } else {
-                                node_color(segment.id)
-                            };
-                            for step in 0..=steps {
-                                let angle = segment.start
-                                    + (segment.end - segment.start) * step as f32 / steps as f32
-                                    - std::f32::consts::FRAC_PI_2;
-                                let direction = egui::vec2(angle.cos(), angle.sin());
-                                mesh.colored_vertex(center + direction * inner, color);
-                                mesh.colored_vertex(center + direction * outer, color);
-                                if step > 0 {
-                                    let i = (step * 2) as u32;
-                                    mesh.add_triangle(i - 2, i - 1, i);
-                                    mesh.add_triangle(i - 1, i + 1, i);
-                                }
-                            }
-                            painter.add(egui::Shape::mesh(mesh));
-                            if let Some(p) = pointer {
-                                let angle = (p.y.atan2(p.x) + std::f32::consts::FRAC_PI_2)
-                                    .rem_euclid(std::f32::consts::TAU);
-                                if p.length() >= inner
-                                    && p.length() < outer
-                                    && angle >= segment.start
-                                    && angle < segment.end
-                                {
-                                    response.clone().on_hover_text(
-                                        scan.nodes[segment.id].name.to_string_lossy(),
-                                    );
-                                    if response.clicked() {
-                                        self.selected = Some(segment.id);
-                                    }
-                                    if response.double_clicked() && scan.nodes[segment.id].directory
-                                    {
-                                        self.root = segment.id;
-                                    }
-                                }
-                            }
-                        }
-                        painter.text(
-                            center,
-                            egui::Align2::CENTER_CENTER,
-                            "Up",
-                            egui::FontId::proportional(14.0),
-                            ui.visuals().text_color(),
-                        );
-                        if response.clicked() && pointer.is_some_and(|p| p.length() < ring) {
-                            self.root = scan.nodes[self.root].parent.unwrap_or(self.root);
-                        }
-                    }
-                    if let Some(id) = self.selected {
-                        let n = &scan.nodes[id];
-                        ui.label(format!(
-                            "{} · {} bytes apparent · {} bytes allocated",
-                            n.name.to_string_lossy(),
-                            n.apparent,
-                            n.allocated
+                    if scan.hard_links_skipped > 0 {
+                        ui.weak(format!(
+                            "{} extra hard links not counted",
+                            scan.hard_links_skipped
                         ));
-                        let path = analysis::node_path(scan, &self.root_path, id);
-                        ui.label(path.to_string_lossy());
-                        if ui.button("Show parent directory").clicked() {
-                            self.root = n.parent.unwrap_or(id);
-                            self.view = View::Directory;
-                        }
                     }
-                    if self.view == View::LargestFiles {
-                        ui.label("All regular files in this scan; totals may include hard links and shared storage.");
-                        ui.horizontal(|ui| {
-                            ui.label("Filename contains");
-                            if ui.text_edit_singleline(&mut self.search).changed() { self.filter_due = Some(Instant::now() + Duration::from_millis(200)); }
-                            if ui.checkbox(&mut self.allocated_order, "Sort by allocated size").changed() { self.filter_due = Some(Instant::now()); }
-                        });
-                        ui.horizontal(|ui| {
-                            ui.label("Minimum bytes (selected metric)");
-                            if ui.add(egui::DragValue::new(&mut self.minimum_bytes)).changed() { self.filter_due = Some(Instant::now() + Duration::from_millis(200)); }
-                        });
-                        if let Some(due) = self.filter_due {
-                            if Instant::now() >= due {
-                                self.matches = self.largest.filter(scan, self.allocated_order, &self.search, self.minimum_bytes);
-                                self.filter_due = None;
-                            } else { ui.ctx().request_repaint_after(due.saturating_duration_since(Instant::now())); ui.label("Updating filter…"); }
-                        }
-                        ui.label(format!("{} matches · largest first", self.matches.len()));
-                        egui::ScrollArea::vertical().id_salt("largest").show_rows(ui, 20.0, self.matches.len(), |ui, rows| {
-                            for row in rows {
-                                let id = self.matches[row];
-                                let node = &scan.nodes[id];
-                                let response = ui.selectable_label(self.selected == Some(id), format!("{} · {} apparent · {} allocated bytes", node.name.to_string_lossy(), node.apparent, node.allocated));
-                                if response.clicked() { self.selected = Some(id); }
-                                response.on_hover_text(analysis::node_path(scan, &self.root_path, id).to_string_lossy());
-                            }
-                        });
-                    } else {
-                    ui.label("Children (double-click a directory to open):");
-                    let children = &self.children[self.root];
-                    egui::ScrollArea::vertical().show_rows(ui, 20.0, children.len(), |ui, rows| {
-                        for row in rows {
-                            let id = children[row];
-                            let n = &scan.nodes[id];
-                            let response = ui.selectable_label(
-                                self.selected == Some(id),
-                                format!("{} · {} bytes", n.name.to_string_lossy(), n.apparent),
-                            );
-                            if response.clicked() {
-                                self.selected = Some(id);
-                            }
-                            if response.double_clicked() && n.directory {
-                                self.root = id;
-                            }
-                        }
-                    });
-                    }
-                }
+                });
+            } else {
+                ui.weak("Choose a folder and select Scan.");
             }
         });
+        if let Some(scan) = scan {
+            let mut open = self.show_errors;
+            egui::Window::new("Scan errors")
+                .open(&mut open)
+                .default_size([520.0, 260.0])
+                .show(ui.ctx(), |ui| {
+                    ui.weak("Paths may contain private information.");
+                    egui::ScrollArea::vertical().show_rows(
+                        ui,
+                        20.0,
+                        scan.errors.len(),
+                        |ui, rows| {
+                            for row in rows {
+                                ui.label(&scan.errors[row]);
+                            }
+                        },
+                    );
+                });
+            self.show_errors = open;
+        }
+    }
+
+    /// Details of the selected item, or of the open folder, plus its contents beside a chart.
+    fn details(&mut self, ui: &mut egui::Ui, scan: &Scan) {
+        let id = self.selected.unwrap_or(self.root);
+        let n = &scan.nodes[id];
+        ui.add_space(6.0);
+        let title = n.name.to_string_lossy();
+        ui.add(
+            egui::Label::new(
+                egui::RichText::new(if title.is_empty() { "/".into() } else { title }).heading(),
+            )
+            .wrap(),
+        );
+        ui.add(
+            egui::Label::new(
+                egui::RichText::new(
+                    analysis::node_path(scan, &self.root_path, id).to_string_lossy(),
+                )
+                .small()
+                .weak(),
+            )
+            .wrap(),
+        );
+        egui::Grid::new("facts")
+            .num_columns(2)
+            .spacing([14.0, 4.0])
+            .show(ui, |ui| {
+                ui.weak("Size");
+                ui.label(look::size(n.apparent));
+                ui.end_row();
+                ui.weak("Allocated");
+                ui.label(look::size(n.allocated));
+                ui.end_row();
+                if n.directory {
+                    ui.weak("Items");
+                    ui.label(self.children[id].len().to_string());
+                    ui.end_row();
+                }
+                if id != self.root {
+                    ui.weak("Of folder");
+                    let whole = scan.nodes[self.root].apparent;
+                    ui.label(format!(
+                        "{:.1}%",
+                        if whole == 0 {
+                            0.0
+                        } else {
+                            n.apparent as f64 * 100.0 / whole as f64
+                        }
+                    ));
+                    ui.end_row();
+                }
+            });
+        if self.selected.is_some() && ui.button("Show parent directory").clicked() {
+            self.root = n.parent.unwrap_or(id);
+            self.view = View::Directory;
+        }
+        // Node 0 is the scan root: excluding it would leave nothing to scan.
+        if n.directory && id != 0 {
+            let path = analysis::node_path(scan, &self.root_path, id);
+            // `absolute` handles a relative scan root such as `.` without resolving symlinks.
+            let path: PathBuf = std::path::absolute(&path)
+                .unwrap_or(path)
+                .components()
+                .collect();
+            if self.exclusions.contains(&path) {
+                ui.weak("Excluded from the next scan");
+            } else if ui
+                .button("Exclude this folder")
+                .on_hover_text("Skip it in the next scan. Saved in settings.")
+                .clicked()
+            {
+                self.push_exclusion(path);
+            }
+        }
+        ui.add(
+            egui::Label::new(
+                egui::RichText::new(
+                    "Allocated size is an estimate and may not equal recoverable space.",
+                )
+                .small()
+                .weak(),
+            )
+            .wrap(),
+        );
+        if scan.root_fs.as_deref() == Some("btrfs") {
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(
+                        "Btrfs: snapshots and reflinks share data, so sizes here can add up to \
+                         more than the space actually used, and deleting a file may free less \
+                         than shown. Compression can make allocated smaller than size. Nested \
+                         subvolumes, such as snapshots, are not entered.",
+                    )
+                    .small()
+                    .color(ui.visuals().warn_fg_color),
+                )
+                .wrap(),
+            );
+        }
+        if matches!(self.view, View::Sunburst | View::Treemap) {
+            ui.separator();
+            self.listing_rows(ui, scan, "side");
+        }
+    }
+
+    fn listing_rows(&mut self, ui: &mut egui::Ui, scan: &Scan, salt: &str) {
+        let whole = scan.nodes[self.root].apparent.max(1);
+        let mut hover = None;
+        let mut enter = None;
+        egui::ScrollArea::vertical()
+            .id_salt(salt)
+            .auto_shrink(false)
+            .show_rows(ui, 24.0, self.listing.len(), |ui, rows| {
+                for row in rows {
+                    let id = self.listing[row];
+                    let n = &scan.nodes[id];
+                    let swatch = look::swatch(scan, &self.segments, id);
+                    let r = look::row(
+                        ui,
+                        &n.name.to_string_lossy(),
+                        n.apparent,
+                        (n.apparent as f64 / whole as f64) as f32,
+                        Some(swatch),
+                        self.selected == Some(id),
+                    );
+                    if r.clicked() {
+                        self.selected = Some(id);
+                    }
+                    if r.double_clicked() && n.directory {
+                        enter = Some(id);
+                    }
+                    if r.hovered() {
+                        hover = Some(id);
+                    }
+                }
+            });
+        if let Some(id) = enter {
+            self.root = id;
+            self.selected = None;
+        }
+        self.hover = hover;
+    }
+
+    fn largest_files(&mut self, ui: &mut egui::Ui, scan: &Arc<Scan>) {
+        ui.horizontal(|ui| {
+            let search =
+                ui.add(egui::TextEdit::singleline(&mut self.search).hint_text("Filename contains"));
+            if search.changed() {
+                self.filter_due = Some(Instant::now() + Duration::from_millis(200));
+            }
+            if ui
+                .checkbox(&mut self.allocated_order, "Rank by allocated size")
+                .changed()
+            {
+                self.filter_due = Some(Instant::now());
+            }
+            ui.label("Minimum bytes");
+            if ui
+                .add(egui::DragValue::new(&mut self.minimum_bytes))
+                .changed()
+            {
+                self.filter_due = Some(Instant::now() + Duration::from_millis(200));
+            }
+        });
+        if let Some(due) = self.filter_due {
+            if Instant::now() >= due {
+                // ponytail: superseded jobs run to completion; add a cancel flag if many pile up.
+                let (tx, rx) = mpsc::channel();
+                let (scan, largest) = (scan.clone(), self.largest.clone());
+                let (allocated, query, minimum) = (
+                    self.allocated_order,
+                    self.search.clone(),
+                    self.minimum_bytes,
+                );
+                thread::spawn(move || {
+                    let _ = tx.send(largest.filter(&scan, allocated, &query, minimum));
+                });
+                self.filter_rx = Some(rx);
+                self.filter_due = None;
+            } else {
+                ui.ctx()
+                    .request_repaint_after(due.saturating_duration_since(Instant::now()));
+            }
+        }
+        if self.filter_due.is_some() || self.filter_rx.is_some() {
+            ui.ctx().request_repaint_after(Duration::from_millis(30));
+        }
+        let metric = |id: usize| {
+            if self.allocated_order {
+                scan.nodes[id].allocated
+            } else {
+                scan.nodes[id].apparent
+            }
+        };
+        let top = self.matches.first().map_or(1, |&id| metric(id).max(1));
+        ui.weak(format!(
+            "{} files in this scan, largest first{}",
+            self.matches.len(),
+            if self.filter_due.is_some() || self.filter_rx.is_some() {
+                " · updating…"
+            } else {
+                ""
+            }
+        ));
+        egui::ScrollArea::vertical()
+            .id_salt("largest")
+            .auto_shrink(false)
+            .show_rows(ui, 24.0, self.matches.len(), |ui, rows| {
+                for row in rows {
+                    let id = self.matches[row];
+                    let bytes = metric(id);
+                    let label = scan.nodes[id].name.to_string_lossy();
+                    let r = look::row(
+                        ui,
+                        &label,
+                        bytes,
+                        (bytes as f64 / top as f64) as f32,
+                        None,
+                        self.selected == Some(id),
+                    );
+                    if r.clicked() {
+                        self.selected = Some(id);
+                    }
+                    r.on_hover_text(
+                        analysis::node_path(scan, &self.root_path, id).to_string_lossy(),
+                    );
+                }
+            });
+    }
+
+    fn central(&mut self, ui: &mut egui::Ui, scan: Option<&Arc<Scan>>) {
+        let Some(scan) = scan.filter(|s| !s.nodes.is_empty()) else {
+            ui.centered_and_justified(|ui| {
+                if self.receiver.is_some() {
+                    if self.reduced_motion {
+                        ui.label("Scanning…");
+                    } else {
+                        ui.spinner();
+                    }
+                } else {
+                    ui.weak("Scan a folder to see where its space goes.");
+                }
+            });
+            return;
+        };
+        let event = match self.view {
+            View::Sunburst => {
+                let (hover, event) = look::sunburst(
+                    ui,
+                    scan,
+                    self.root,
+                    &self.segments,
+                    self.selected,
+                    self.hover,
+                );
+                self.hover = hover;
+                event
+            }
+            View::Treemap => {
+                if self.tiles.is_empty() {
+                    ui.weak("No nonzero entries in this folder; use the Directory view.");
+                }
+                let (hover, event) =
+                    look::treemap(ui, scan, self.root, &self.tiles, self.selected, self.hover);
+                self.hover = hover;
+                event
+            }
+            View::Directory => {
+                self.listing_rows(ui, scan, "directory");
+                look::Event::None
+            }
+            View::LargestFiles => {
+                self.largest_files(ui, scan);
+                look::Event::None
+            }
+        };
+        match event {
+            look::Event::Enter(id) => {
+                self.root = id;
+                self.selected = None;
+            }
+            look::Event::Select(id) => self.selected = Some(id),
+            look::Event::Up => self.root = scan.nodes[self.root].parent.unwrap_or(self.root),
+            look::Event::None => {}
+        }
     }
 }
-fn node_color(id: usize) -> egui::Color32 {
-    egui::Color32::from_rgb(
-        60 + (id.wrapping_mul(47) % 140) as u8,
-        90 + (id.wrapping_mul(31) % 130) as u8,
-        170,
+
+impl eframe::App for App {
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.poll();
+        let ctx = ui.ctx().clone();
+        if self.applied_look != Some((self.theme, self.reduced_motion)) {
+            look::set_theme(&ctx, self.theme);
+            look::set_motion(&ctx, self.reduced_motion);
+            self.applied_look = Some((self.theme, self.reduced_motion));
+        }
+        self.zoom = (ctx.zoom_factor() * 100.0).round() as u32;
+        let scan = self.result.clone();
+        if let Some(scan) = scan.as_deref().filter(|s| !s.nodes.is_empty())
+            && self.chart_root != Some(self.root)
+        {
+            self.segments = chart::layout(scan, &self.children, self.root, 4);
+            self.tiles = chart::treemap(scan, &self.children[self.root]);
+            self.listing = self.children[self.root].clone();
+            self.listing
+                .sort_unstable_by_key(|&id| (std::cmp::Reverse(scan.nodes[id].apparent), id));
+            self.chart_root = Some(self.root);
+        }
+        egui::Panel::top("toolbar").show(ui, |ui| self.toolbar(ui, scan.as_deref()));
+        egui::Panel::bottom("status").show(ui, |ui| self.status(ui, scan.as_deref()));
+        egui::Panel::left("volumes")
+            .default_size(240.0)
+            .size_range(180.0..=400.0)
+            .show(ui, |ui| self.volumes_panel(ui));
+        if let Some(scan) = scan.as_deref().filter(|s| !s.nodes.is_empty()) {
+            egui::Panel::right("details")
+                .default_size(300.0)
+                .size_range(220.0..=480.0)
+                .show(ui, |ui| self.details(ui, scan));
+        }
+        egui::CentralPanel::default().show(ui, |ui| self.central(ui, scan.as_ref()));
+        self.persist_settings();
+        // `viewport().inner_rect` is None on Wayland, so use the content rect: its size is the
+        // window's inner size in points.
+        let maximized = ui.ctx().input(|i| {
+            i.viewport().maximized == Some(true) || i.viewport().fullscreen == Some(true)
+        });
+        if !maximized {
+            // Content size is in zoomed points; the window is sized in unzoomed ones.
+            let size = ui.ctx().content_rect().size() * ui.ctx().zoom_factor();
+            self.window_size = Some((size.x.round() as u32, size.y.round() as u32));
+        }
+    }
+
+    fn on_exit(&mut self) {
+        let now = settings::Settings {
+            window: self.window_size.or(self.saved_settings.window),
+            ..self.current_settings()
+        };
+        if now != self.saved_settings {
+            let _ = settings::save(&now); // exiting: nowhere left to report an error
+        }
+    }
+}
+
+fn main() -> eframe::Result {
+    let saved = settings::load();
+    let size = saved
+        .window
+        .map_or([1100.0, 740.0], |(w, h)| [w as f32, h as f32]);
+    let viewport = egui::ViewportBuilder::default()
+        .with_title("Disk Atlas")
+        .with_app_id("diskatlas")
+        .with_inner_size(size)
+        .with_min_inner_size([640.0, 420.0]);
+    eframe::run_native(
+        "Disk Atlas",
+        eframe::NativeOptions {
+            viewport,
+            ..Default::default()
+        },
+        Box::new(move |cc| {
+            look::apply(&cc.egui_ctx);
+            cc.egui_ctx.set_zoom_factor(saved.zoom as f32 / 100.0);
+            let mut app = App::from_settings(saved);
+            // `diskatlas <folder>` scans immediately, like `filelight <folder>`.
+            if let Some(path) = std::env::args().nth(1) {
+                app.path = path;
+                app.start_scan();
+            }
+            Ok(Box::new(app))
+        }),
     )
 }
-fn main() -> eframe::Result {
-    eframe::run_native(
-        "diskatlas",
-        eframe::NativeOptions::default(),
-        Box::new(|_| Ok(Box::<App>::default())),
-    )
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exclusions_are_absolute_and_deduplicated() {
+        let mut app = App::default();
+        for input in ["/a/b/", " /a/b ", "relative/dir", ""] {
+            app.exclude_input = input.into();
+            app.add_exclusion();
+        }
+        assert_eq!(app.exclusions, [PathBuf::from("/a/b")]);
+        assert!(app.error.is_some(), "relative path must be rejected");
+    }
 }

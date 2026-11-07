@@ -3,10 +3,12 @@ use std::{
     collections::HashSet,
     ffi::OsString,
     os::unix::fs::MetadataExt,
-    path::Path,
+    path::{Path, PathBuf},
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 use walkdir::WalkDir;
+
+pub mod mounts;
 
 /// A filesystem entry. Parent indices refer to earlier entries in the scan.
 #[derive(Debug)]
@@ -27,27 +29,70 @@ pub struct Scan {
     pub cancelled: bool,
     /// Extra hard links to an already-counted file; they count 0 bytes (like `du`).
     pub hard_links_skipped: usize,
+    /// Filesystem type of the scan root (e.g. `btrfs`), from the mount table.
+    pub root_fs: Option<String>,
+    /// Folders left unentered because they are on a different device: mounted volumes, and on
+    /// Btrfs the nested subvolumes (each subvolume has its own device number).
+    pub other_device_skipped: usize,
 }
 
 /// Scan without following symbolic links or crossing device boundaries.
 pub fn scan(path: &Path, cancel: &AtomicBool) -> Scan {
-    scan_with_progress(path, cancel, &AtomicUsize::new(0))
+    scan_with_progress(path, cancel, &AtomicUsize::new(0), &[])
 }
 
 /// Like [`scan`], and publishes the number of entries found so far to `progress`.
-pub fn scan_with_progress(path: &Path, cancel: &AtomicBool, progress: &AtomicUsize) -> Scan {
+/// Folders in `exclude` are listed as empty leaves and never entered, like mount points.
+pub fn scan_with_progress(
+    path: &Path,
+    cancel: &AtomicBool,
+    progress: &AtomicUsize,
+    exclude: &[PathBuf],
+) -> Scan {
+    // Mount points (bind mounts, subvolumes, pseudo-filesystems) are listed but never entered.
+    // If the mount table is unreadable, the same-device check below is the only guard.
+    let table = mounts::read().unwrap_or_default();
+    let mut skip: HashSet<PathBuf> = table.iter().map(|m| m.mount_point.clone()).collect();
+    skip.extend(exclude.iter().map(|p| canonical_parent(p)));
+    let mut result = scan_excluding(path, cancel, progress, &skip);
+    result.root_fs = std::fs::canonicalize(path)
+        .ok()
+        .and_then(|root| mounts::mount_for(&table, &root).map(|m| m.fs_type.clone()));
+    result
+}
+
+/// Canonicalize the directory holding `path` but not `path` itself, so excluding a symlink
+/// never excludes its target. Falls back to the path as given.
+fn canonical_parent(path: &Path) -> PathBuf {
+    path.parent()
+        .and_then(|dir| std::fs::canonicalize(dir).ok())
+        .zip(path.file_name())
+        .map_or_else(|| path.to_path_buf(), |(dir, name)| dir.join(name))
+}
+
+fn scan_excluding(
+    path: &Path,
+    cancel: &AtomicBool,
+    progress: &AtomicUsize,
+    mount_points: &HashSet<PathBuf>,
+) -> Scan {
+    // Mount points are canonical; map each entry onto the canonical root before comparing.
+    let canonical_root = std::fs::canonicalize(path).ok();
     let mut result = Scan::default();
     let mut parents = Vec::new();
     // ponytail: in-memory set of multi-link inodes; fine until millions of linked files.
     let mut seen_links = HashSet::new();
-    for item in WalkDir::new(path)
+    let mut root_dev = None;
+    let mut walker = WalkDir::new(path)
         .follow_links(false)
         // A symlinked root is deliberately followed so `/var/foo -> /data` scans /data;
         // every symlink below the root is recorded but never entered.
         .follow_root_links(true)
-        .same_file_system(true)
+        // Device boundaries are enforced below: walkdir's own check yields such a directory
+        // without descending, which makes `skip_current_dir` skip its *parent* instead.
         .max_open(32)
-    {
+        .into_iter();
+    while let Some(item) = walker.next() {
         if cancel.load(Ordering::Relaxed) {
             result.cancelled = true;
             break;
@@ -74,6 +119,9 @@ pub fn scan_with_progress(path: &Path, cancel: &AtomicBool, progress: &AtomicUsi
             .as_ref()
             .map_or(entry.file_type(), |m| m.file_type());
         let depth = entry.depth();
+        if depth == 0 {
+            root_dev = metadata.as_ref().map(MetadataExt::dev);
+        }
         parents.truncate(depth);
         debug_assert_eq!(parents.len(), depth, "every traversed ancestor is indexed");
         let parent = parents.last().copied();
@@ -101,7 +149,20 @@ pub fn scan_with_progress(path: &Path, cancel: &AtomicBool, progress: &AtomicUsi
         });
         progress.store(id + 1, Ordering::Relaxed);
         if file_type.is_dir() {
-            parents.push(id);
+            let other_device = metadata
+                .as_ref()
+                .zip(root_dev)
+                .is_some_and(|(m, dev)| m.dev() != dev);
+            let is_mount_point = canonical_root
+                .as_ref()
+                .zip(entry.path().strip_prefix(path).ok())
+                .is_some_and(|(root, rel)| mount_points.contains(&root.join(rel)));
+            if depth > 0 && (other_device || is_mount_point) {
+                result.other_device_skipped += usize::from(other_device);
+                walker.skip_current_dir();
+            } else {
+                parents.push(id);
+            }
         }
     }
     for id in (0..result.nodes.len()).rev() {
@@ -214,12 +275,80 @@ mod tests {
     }
 
     #[test]
+    fn excluded_mount_points_are_leaves() {
+        // Same device, so only the mount-point set can exclude it (like a bind mount).
+        let f = Fixture::new("bind");
+        fs::create_dir_all(f.0.join("bind/sub")).unwrap();
+        fs::write(f.0.join("bind/sub/inner"), [0u8; 40]).unwrap();
+        fs::write(f.0.join("keep"), [0u8; 2]).unwrap();
+        let excluded = HashSet::from([fs::canonicalize(&f.0).unwrap().join("bind")]);
+        let s = scan_excluding(
+            &f.0,
+            &AtomicBool::new(false),
+            &AtomicUsize::new(0),
+            &excluded,
+        );
+        let bind = find(&s, "bind");
+        assert!(s.nodes[bind].directory);
+        assert!(
+            s.nodes.iter().all(|n| n.parent != Some(bind)),
+            "must not be entered"
+        );
+        assert_eq!(s.nodes[0].apparent, 2);
+        // Without the exclusion the contents are counted.
+        let s = scan_excluding(
+            &f.0,
+            &AtomicBool::new(false),
+            &AtomicUsize::new(0),
+            &HashSet::new(),
+        );
+        assert_eq!(s.nodes[0].apparent, 42);
+    }
+
+    #[test]
+    fn user_exclusions_skip_folders_but_not_symlink_targets() {
+        let f = Fixture::new("exclude");
+        fs::create_dir_all(f.0.join("skipme/deep")).unwrap();
+        fs::write(f.0.join("skipme/deep/big"), [0u8; 40]).unwrap();
+        fs::create_dir(f.0.join("real")).unwrap();
+        fs::write(f.0.join("real/x"), [0u8; 5]).unwrap();
+        fs::write(f.0.join("keep"), [0u8; 2]).unwrap();
+        symlink(f.0.join("real"), f.0.join("link")).unwrap();
+        let run = |exclude: &[PathBuf]| {
+            scan_with_progress(&f.0, &AtomicBool::new(false), &AtomicUsize::new(0), exclude)
+        };
+        let s = run(&[f.0.join("skipme")]);
+        let skipped = find(&s, "skipme");
+        assert!(s.nodes[skipped].directory);
+        assert!(s.nodes.iter().all(|n| n.parent != Some(skipped)));
+        assert_eq!(s.nodes[0].apparent, 7);
+        // Excluding a symlink must not exclude the directory it points to.
+        let s = run(&[f.0.join("link")]);
+        assert_eq!(s.nodes[0].apparent, 47);
+        // A trailing slash and a nonexistent path are harmless.
+        let s = run(&[f.0.join("skipme/"), f.0.join("nope")]);
+        assert_eq!(s.nodes[0].apparent, 7);
+    }
+
+    #[test]
+    fn root_filesystem_type_is_detected() {
+        let f = Fixture::new("fstype");
+        let s = scan(&f.0, &AtomicBool::new(false));
+        assert!(
+            s.root_fs.as_ref().is_some_and(|t| !t.is_empty()),
+            "{:?}",
+            s.root_fs
+        );
+        assert_eq!(s.other_device_skipped, 0);
+    }
+
+    #[test]
     fn progress_reports_entry_count() {
         let f = Fixture::new("progress");
         fs::create_dir(f.0.join("d")).unwrap();
         fs::write(f.0.join("d/x"), [0u8; 1]).unwrap();
         let progress = AtomicUsize::new(0);
-        let s = scan_with_progress(&f.0, &AtomicBool::new(false), &progress);
+        let s = scan_with_progress(&f.0, &AtomicBool::new(false), &progress, &[]);
         assert_eq!(progress.load(Ordering::Relaxed), s.nodes.len());
         assert_eq!(s.nodes.len(), 3);
     }
@@ -252,7 +381,16 @@ mod tests {
         if !differs {
             return;
         }
+        let before: Vec<_> = fs::read_dir(parent)
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
         let s = scan(parent, &AtomicBool::new(false));
+        // Siblings of a mount point must survive (regression: skip_current_dir popped the parent).
+        for name in before.iter().filter(|n| parent.join(n).exists()) {
+            assert!(s.nodes.iter().any(|n| &n.name == name), "{name:?} missing");
+        }
+        assert!(s.other_device_skipped >= 1, "/dev/shm is on another device");
         // The mount point may be listed as a leaf, but never entered.
         let shm = s.nodes.iter().position(|n| n.name == "shm");
         assert!(
