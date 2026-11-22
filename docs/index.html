@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Disk Atlas: a Linux disk usage analyzer with sunburst and treemap views</title>
+<meta name="description" content="Disk Atlas is a free, open source Linux disk usage analyzer written in Rust with egui and wgpu. Sunburst and treemap charts, a largest files view and read-only background scans.">
+<link rel="canonical" href="https://mikeholp87.github.io/disk-atlas/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Disk Atlas: a Linux disk usage analyzer with sunburst and treemap views">
+<meta property="og:description" content="Disk Atlas is a free, open source Linux disk usage analyzer written in Rust with egui and wgpu. Sunburst and treemap charts, a largest files view and read-only background scans.">
+<meta property="og:url" content="https://mikeholp87.github.io/disk-atlas/">
+<meta name="twitter:card" content="summary">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "Disk Atlas", "description": "Disk Atlas is a free, open source Linux disk usage analyzer written in Rust with egui and wgpu. Sunburst and treemap charts, a largest files view and read-only background scans.", "url": "https://mikeholp87.github.io/disk-atlas/", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Linux", "programmingLanguage": "Rust", "codeRepository": "https://github.com/mikeholp87/disk-atlas", "license": "https://opensource.org/license/mit", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}, "author": {"@type": "Person", "name": "Mike Holp", "url": "https://www.ai-automation-station.com/about.html", "sameAs": ["https://github.com/mikeholp87", "https://www.ai-automation-station.com/"]}}</script>
+<style>
+  :root { --bg: #fafafa; --fg: #1c1c22; --muted: #62626e; --card: #fff; --line: #e3e3ea; --accent: #3b5bdb; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #15151a; --fg: #ececf1; --muted: #9a9aa8; --card: #1e1e25; --line: #2e2e38; --accent: #8da9ff; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 system-ui, sans-serif; }
+  main { max-width: 46rem; margin: 0 auto; padding: 3rem 1rem 2rem; }
+  h1 { margin: 0 0 .5rem; font-size: 2.2rem; }
+  h2 { margin-top: 2.2rem; }
+  a { color: var(--accent); }
+  .lead { font-size: 1.15rem; color: var(--muted); }
+  pre { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 1rem; overflow-x: auto; }
+  .note { border-left: 3px solid var(--accent); padding: .1rem 1rem; color: var(--muted); }
+  footer { max-width: 46rem; margin: 0 auto; padding: 1rem 1rem 3rem; color: var(--muted); font-size: .9rem; border-top: 1px solid var(--line); }
+  footer a { margin-right: 1rem; }
+</style>
+</head>
+<body>
+<main>
+<h1>Disk Atlas</h1>
+<p class="lead">A free, open source disk usage analyzer for Linux, written in Rust with egui and wgpu. See which folders and files take the space, in a sunburst, a treemap or a plain directory list.</p>
+<p><a href="https://github.com/mikeholp87/disk-atlas">View the source on GitHub</a></p>
+<h2>Features</h2>
+<ul>
+<li>Read-only background scan with cancellation and a live entry count</li>
+<li>Three-ring sunburst, a treemap of the current folder and a virtualized directory list</li>
+<li>Largest Files view with filename search and minimum-size filters, using apparent or allocated size</li>
+<li>Mounted volumes with capacity, folder exclusions, and light, dark and high contrast themes</li>
+<li>Works on Wayland and X11; does not cross into other devices or mount points</li>
+</ul>
+<h2>Run it</h2>
+<pre>git clone https://github.com/mikeholp87/disk-atlas
+cd disk-atlas
+cargo run -p diskatlas</pre>
+<p>Needs Rust 1.96 or newer and a Linux desktop with working graphics drivers. Pass a folder, for example <code>diskatlas ~/Downloads</code>, to start scanning immediately.</p>
+<h2>Status</h2>
+<p class="note">Early development build. Pause and resume, name-pattern exclusions, cleanup and installable packages are not finished, and desktop interaction has not been verified across KDE, GNOME, Wayland and X11.</p>
+<h2>Related</h2>
+<p>Other projects by the same author: <a href="https://mikeholp87.github.io/Tasky/">Tasky</a>, <a href="https://mikeholp87.github.io/Luma-Launcher/">Luma Launcher</a>, <a href="https://mikeholp87.github.io/Restic-Studio/">Restic Studio</a> and <a href="https://mikeholp87.github.io/">all projects</a>.</p>
+</main>
+<footer>
+<p>Disk Atlas is free and open source under the MIT license. Built by Mike Holp.</p>
+<a href="https://github.com/mikeholp87/disk-atlas">GitHub</a><a href="https://github.com/mikeholp87/disk-atlas/issues">Issues</a><a href="https://github.com/mikeholp87/disk-atlas/blob/main/LICENSE">License</a><a href="https://www.ai-automation-station.com/guides.html">Build guides</a><a href="https://www.ai-automation-station.com/">AI Automation Station</a>
+</footer>
+</body>
+</html>
