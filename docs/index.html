@@ -4,14 +4,42 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Disk Atlas: a Linux disk usage analyzer with sunburst and treemap views</title>
-<meta name="description" content="Disk Atlas is a free, open source Linux disk usage analyzer written in Rust with egui and wgpu. Sunburst and treemap charts, a largest files view and read-only background scans.">
+<meta name="description" content="Disk Atlas is a free Linux disk usage analyzer in Rust. Sunburst and treemap views, largest files and read-only scans. Early development build.">
 <link rel="canonical" href="https://mikeholp87.github.io/disk-atlas/">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Disk Atlas: a Linux disk usage analyzer with sunburst and treemap views">
 <meta property="og:description" content="Disk Atlas is a free, open source Linux disk usage analyzer written in Rust with egui and wgpu. Sunburst and treemap charts, a largest files view and read-only background scans.">
 <meta property="og:url" content="https://mikeholp87.github.io/disk-atlas/">
 <meta name="twitter:card" content="summary">
-<script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "Disk Atlas", "description": "Disk Atlas is a free, open source Linux disk usage analyzer written in Rust with egui and wgpu. Sunburst and treemap charts, a largest files view and read-only background scans.", "url": "https://mikeholp87.github.io/disk-atlas/", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Linux", "programmingLanguage": "Rust", "codeRepository": "https://github.com/mikeholp87/disk-atlas", "license": "https://opensource.org/license/mit", "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}, "author": {"@type": "Person", "name": "Mike Holp", "url": "https://www.ai-automation-station.com/about.html", "sameAs": ["https://github.com/mikeholp87", "https://www.ai-automation-station.com/"]}}</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Disk Atlas",
+  "description": "Disk Atlas is a free, open source Linux disk usage analyzer written in Rust with egui and wgpu. Sunburst and treemap charts, a largest files view and read-only background scans.",
+  "url": "https://mikeholp87.github.io/disk-atlas/",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Linux",
+  "programmingLanguage": "Rust",
+  "codeRepository": "https://github.com/mikeholp87/disk-atlas",
+  "license": "https://opensource.org/license/mit",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "author": {
+    "@type": "Person",
+    "name": "Mike Holp",
+    "url": "https://www.ai-automation-station.com/about.html",
+    "sameAs": [
+      "https://github.com/mikeholp87",
+      "https://www.ai-automation-station.com/"
+    ]
+  },
+  "dateModified": "2026-11-22"
+}
+</script>
 <style>
   :root { --bg: #fafafa; --fg: #1c1c22; --muted: #62626e; --card: #fff; --line: #e3e3ea; --accent: #3b5bdb; }
   @media (prefers-color-scheme: dark) { :root { --bg: #15151a; --fg: #ececf1; --muted: #9a9aa8; --card: #1e1e25; --line: #2e2e38; --accent: #8da9ff; } }
@@ -33,6 +61,9 @@
 <h1>Disk Atlas</h1>
 <p class="lead">A free, open source disk usage analyzer for Linux, written in Rust with egui and wgpu. See which folders and files take the space, in a sunburst, a treemap or a plain directory list.</p>
 <p><a href="https://github.com/mikeholp87/disk-atlas">View the source on GitHub</a></p>
+<h2>What is Disk Atlas?</h2>
+<p>Disk Atlas is a free, open source disk usage analyzer for Linux, written in Rust with egui and wgpu. It scans a folder on a background thread without modifying anything and shows where the space went in three views: a three-ring sunburst, a treemap of the current directory and a plain directory list. A Largest Files view ranks regular files across the whole scan with filename search and a minimum-size filter, using either apparent or allocated size. The left panel lists mounted volumes with their capacity and lets you exclude folders from the next scan, and the scanner does not cross into other devices or mount points. Themes include system, light, dark and high contrast, and the app runs on both Wayland and X11. Disk Atlas uses the MIT license and is an early development build: pause and resume, cleanup actions and installable packages are not finished yet.</p>
+<p><small>Updated November 22, 2026</small></p>
 <h2>Features</h2>
 <ul>
 <li>Read-only background scan with cancellation and a live entry count</li>
