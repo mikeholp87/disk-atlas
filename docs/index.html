@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Disk Atlas: a Linux disk usage analyzer with sunburst and treemap views</title>
-<meta name="description" content="Disk Atlas is a free Linux disk usage analyzer in Rust. Sunburst and treemap views, largest files and read-only scans. Early development build.">
+<title>Disk Atlas: Linux Disk Usage Analyzer in Rust</title>
+<meta name="description" content="Disk Atlas is a free Linux disk usage analyzer in Rust. Sunburst and treemap views, a largest files list and read-only scans. Early development build.">
 <link rel="canonical" href="https://mikeholp87.github.io/disk-atlas/">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Disk Atlas: a Linux disk usage analyzer with sunburst and treemap views">
@@ -54,6 +54,11 @@
   .note { border-left: 3px solid var(--accent); padding: .1rem 1rem; color: var(--muted); }
   footer { max-width: 46rem; margin: 0 auto; padding: 1rem 1rem 3rem; color: var(--muted); font-size: .9rem; border-top: 1px solid var(--line); }
   footer a { margin-right: 1rem; }
+table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+th, td { padding: .6rem .7rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { color: var(--muted); font-size: .8rem; text-transform: uppercase; }
+td:first-child { font-weight: 650; }
+.table-wrap { overflow-x: auto; background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
 </style>
 </head>
 <body>
@@ -72,6 +77,19 @@
 <li>Mounted volumes with capacity, folder exclusions, and light, dark and high contrast themes</li>
 <li>Works on Wayland and X11; does not cross into other devices or mount points</li>
 </ul>
+<h2>How does Disk Atlas compare with other Linux disk usage analyzers?</h2>
+<p>Disk Atlas is an early build, so it fits people who want to try a new analyzer, not those who need a packaged tool today.</p>
+<div class="table-wrap">
+<table>
+<thead><tr><th scope="col">Tool</th><th scope="col">Type</th><th scope="col">Good fit when</th></tr></thead>
+<tbody>
+<tr><td>Disk Atlas</td><td>Rust desktop app (egui and wgpu)</td><td>You want sunburst, treemap and largest-files views in one read-only scan. Early build, run from source, no cleanup actions yet.</td></tr>
+<tr><td>Filelight</td><td>KDE desktop app</td><td>You use KDE and want concentric ring charts from a packaged app.</td></tr>
+<tr><td>Disk Usage Analyzer (Baobab)</td><td>GNOME desktop app</td><td>You use GNOME and want ring and treemap charts that are already installed.</td></tr>
+<tr><td>ncdu</td><td>Terminal program</td><td>You work over SSH and want a fast, text-only directory list.</td></tr>
+</tbody>
+</table>
+</div>
 <h2>Run it</h2>
 <pre>git clone https://github.com/mikeholp87/disk-atlas
 cd disk-atlas
