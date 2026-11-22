@@ -113,3 +113,7 @@ charts and list rows) so assistive technology can read it. This is verified by t
 generated tree and of the key handling, **not yet with a real screen reader such as Orca**,
 and the charts announce a summary rather than every segment. Enabling AccessKit adds about
 55 crates (the AT-SPI/zbus stack) and about 6 MB to an unstripped binary.
+
+## Author
+
+Built by [Mike Holp](https://www.ai-automation-station.com/about.html) with AI coding tools. See more build guides on [AI Automation Station](https://www.ai-automation-station.com/guides.html), and more projects at [github.com/mikeholp87](https://github.com/mikeholp87).
