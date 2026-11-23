@@ -610,11 +610,58 @@
         }
       }
     
+      .hero { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+      .hero .lead { max-width: 46em; }
+      .demo-hint { margin: 0 0 12px; font-size: 14px; }
+
       .shot img.shot-small {
         max-height: 560px;
         object-fit: contain;
       }
 </style>
+    <style>#demo {
+
+      .win { --w-bg:#242424; --w-head:#303030; --w-ink:#f2f2f2; --w-dim:#a8a8a8; --w-field:#1f1f1f; --w-btn:#3c3c3c; --w-btn-h:#4a4a4a; --w-edge:#4a4a4a; --w-accent:#3584e4; --w-sel:#1a5fb4;
+        --w-teal:#2fbfae; --w-amber:#e5a93d; --w-purple:#a67be0; --w-gray:#8a8a8a; --w-bad:#e0556a; --w-ok:#4cc38a;
+        background:var(--w-bg); color:var(--w-ink); border:1px solid var(--w-edge); border-radius:12px; overflow:hidden; box-shadow:0 30px 70px -30px rgba(0,0,0,.55); font-size:14px; }
+      .win.light { --w-bg:#fafafa; --w-head:#ebebeb; --w-ink:#1e1e1e; --w-dim:#5e5e5e; --w-field:#fff; --w-btn:#ececec; --w-btn-h:#e0e0e0; --w-edge:#cfcfcf; --w-accent:#1c71d8; --w-sel:#3584e4; --w-teal:#118a7c; --w-amber:#a86f00; --w-purple:#7048b8; --w-gray:#6e6e6e; --w-bad:#b3223a; --w-ok:#18794e; }
+      .title { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 14px; background:var(--w-head); border-bottom:1px solid var(--w-edge); }
+      .title strong { flex:1; text-align:center; }
+      .win select, .win input[type=text], .win input[type=search] { font:inherit; color:inherit; background:var(--w-field); border:1px solid var(--w-edge); border-radius:8px; padding:7px 10px; }
+      .win select { background:var(--w-btn); }
+      .win input:focus, .win select:focus, .win button:focus-visible { outline:2px solid var(--w-accent); outline-offset:1px; }
+      .win button { font:inherit; color:inherit; background:var(--w-btn); border:1px solid var(--w-edge); border-radius:8px; padding:7px 12px; cursor:pointer; }
+      .win button:hover { background:var(--w-btn-h); }
+      .win button.primary, .win button[aria-pressed=true], .win button[aria-current=page] { background:var(--w-sel); border-color:var(--w-sel); color:#fff; }
+      .win button:disabled { opacity:.5; cursor:not-allowed; }
+      .statusline { padding:8px 16px; color:var(--w-dim); border-top:1px solid var(--w-edge); min-height:36px; }
+      .bar { padding:10px 14px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; border-bottom:1px solid var(--w-edge); }
+      .bar input[type=text] { flex:1; min-width:200px; }
+      .seg { display:flex; gap:6px; flex-wrap:wrap; }
+      .muted { color:var(--w-dim); }
+      table { width:100%; border-collapse:collapse; font-size:13px; }
+      th, td { text-align:left; padding:6px 10px; border-bottom:1px solid var(--w-edge); }
+      th { color:var(--w-dim); font-weight:600; }
+      th { text-transform:none; letter-spacing:0; font-size:inherit; }
+      td, td:first-child { font-weight:inherit; color:inherit; }
+      td, th { background:transparent; }
+      .view { overflow-x:auto; }
+
+      .atlas { display:grid; grid-template-columns:1fr; }
+      .view { padding:12px; min-height:420px; }
+      .crumbs { padding:8px 14px; color:var(--w-dim); }
+      .crumbs button { padding:2px 8px; margin-right:2px; }
+      #chart { display:block; margin:0 auto; max-width:100%; height:auto; }
+      #chart path { stroke:var(--w-bg); stroke-width:1; cursor:pointer; }
+      #chart path:hover, .tm div:hover { filter:brightness(1.12); }
+      .tm { position:relative; width:100%; height:420px; }
+      .tm div { position:absolute; border:2px solid var(--w-bg); padding:6px 8px; overflow:hidden; color:#1b1b1b; cursor:pointer; font-size:13px; }
+      .tm div small { display:block; opacity:.75; }
+      .info { padding:10px 14px; border-top:1px solid var(--w-edge); }
+      .list tr { cursor:pointer; } .list tr:hover { background:var(--w-btn); }
+      .barcell { height:6px; border-radius:3px; background:var(--w-accent); }
+
+}</style>
   </head>
   <body>
     <a class="skip" href="#content">Skip to content</a>
@@ -626,7 +673,6 @@
         <nav class="nav" aria-label="Main navigation">
           <a class="hide-sm" href="#features">Features</a>
           <a class="hide-sm" href="#screenshots">Screenshots</a>
-          <a class="hide-sm" href="./demo/">Demo</a>
           <a href="#install">Install</a>
           <a class="hide-sm" href="#faq">FAQ</a>
           <a class="pill" href="https://github.com/mikeholp87/disk-atlas">GitHub</a>
@@ -640,7 +686,6 @@
             <p class="lead">Disk Atlas scans a folder in the background without changing anything, then shows what takes the space as a sunburst, a treemap or a plain directory list, with a Largest Files view across the whole scan.</p>
             <div class="actions">
               <a class="button" href="#install">Run it from source</a>
-              <a class="button secondary" href="./demo/">Try the demo</a>
               <a class="button secondary" href="https://github.com/mikeholp87/disk-atlas">View source</a>
             </div>
             <ul class="badges" aria-label="Highlights">
@@ -651,13 +696,37 @@
               <li class="preview">Early build</li>
             </ul>
           </div>
-          <figure class="shot">
-            <picture>
-              <source type="image/webp" srcset="./assets/hero-640.webp 640w, ./assets/hero-1280.webp 1280w" sizes="(max-width: 760px) calc(100vw - 32px), 580px" />
-              <img src="./assets/hero-1280.webp" width="1280" height="887" fetchpriority="high" alt="Disk Atlas showing a sunburst chart of a sample home folder with a list of its directories and sizes" />
-            </picture>
-            <figcaption>The sunburst view after scanning a sample folder.</figcaption>
-          </figure>
+          <div id="demo">
+          <p class="fine demo-hint"><strong>Try it:</strong> press <strong>Scan</strong>, click a folder in the chart to open it, then try <strong>Treemap</strong> and <strong>Largest files</strong>.</p>
+          <div class="win" id="win" role="application" aria-label="Disk Atlas demo">
+            <div class="title">
+              <span aria-hidden="true">☰</span><strong>Disk Atlas</strong>
+              <label style="position:absolute;left:-9999px" for="theme">Theme</label>
+              <select id="theme"><option value="system">System theme</option><option value="light">Light</option><option value="dark">Dark</option></select>
+            </div>
+
+        <div class="bar">
+          <button type="button" id="up">Up</button>
+          <input type="text" id="path" value="/home/demo" readonly aria-label="Folder" />
+          <button type="button" id="scan" class="primary">Scan</button>
+        </div>
+        <div class="crumbs" id="crumbs"></div>
+        <div class="bar">
+          <div class="seg" role="group" aria-label="View">
+            <button type="button" data-v="sun" aria-pressed="true">Sunburst</button>
+            <button type="button" data-v="tree" aria-pressed="false">Treemap</button>
+            <button type="button" data-v="dir" aria-pressed="false">Directory</button>
+            <button type="button" data-v="big" aria-pressed="false">Largest files</button>
+          </div>
+          <label class="muted"><input type="checkbox" id="alloc" /> Rank by allocated size</label>
+        </div>
+        <div class="view" id="view"><p class="muted">Press Scan to scan the sample folder.</p></div>
+        <div class="info" id="info">Nothing selected.</div>
+        <div class="statusline" id="status" role="status" aria-live="polite">Ready. Nothing has been scanned.</div>
+
+          </div>
+          <p class="fine">Browser demo with a pretend folder and sample files. It cannot read your disk, and nothing leaves this page.</p>
+        </div>
         </section>
 
         <section id="about" class="faq" aria-labelledby="about-title">
@@ -926,6 +995,114 @@ sudo apt install ./target/deb/diskatlas_*.deb</code></pre>
         box.appendChild(button);
       });
     </script>
+    <script>(() => {
+"use strict";
+const $ = (id) => document.getElementById(id);
+$("theme").addEventListener("change", () => {
+  const v = $("theme").value;
+  const dark = v === "dark" || (v === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+  $("win").classList.toggle("light", !dark);
+});
+$("theme").dispatchEvent(new Event("change"));
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => $("theme").dispatchEvent(new Event("change")));
+
+const M = 1048576, G = 1024 * M;
+const T = (n, c) => ({ n, c }), F = (n, s) => ({ n, s: s * M });
+const ROOT = T("demo", [
+  T("Videos", [T("Raw", [F("interview-take1.mov", 900), F("interview-take2.mov", 700)]), T("Projects", [F("launch-edit.mp4", 420), F("tutorial-final.mp4", 310), F("intro-b-roll.mp4", 150)])]),
+  T("Photos", [T("2025", [1,2,3,4,5,6].map(i => F("IMG_100" + i + ".raw", 60 + i * 9))), T("2026", [1,2,3,4].map(i => F("IMG_200" + i + ".raw", 40 + i * 7)))]),
+  T("Downloads", [T("ISOs", [F("debian-live.iso", 1400), F("ubuntu-desktop.iso", 800)]), T("Installers", [F("editor-setup.deb", 190), F("toolkit.AppImage", 85)])]),
+  T("Documents", [T("Reports", [F("annual-report.pdf", 120), F("budget.ods", 45)]), T("Archive", [F("2024-scans.zip", 260)])]),
+  T("Music", [1,2,3,4,5,6,7,8].map(i => F("album-" + i + ".flac", 25 + i * 3))),
+  T("Code", [T("webapp", [F("node_modules.tar", 520)]), T("tools", [F("target-cache.bin", 210), F("dataset.csv", 95)])]),
+  T("Backups", [T("Monthly", [F("home-2026-09.tar.zst", 1100), F("home-2026-10.tar.zst", 1100), F("home-2026-11.tar.zst", 1150)])]),
+]);
+(function size(n) { n.a = n.s ? n.s + 4096 : 0; if (n.c) { n.s = 0; for (const k of n.c) { size(k); n.s += k.s; n.a += k.a; } n.a += 4096; } return n; })(ROOT);
+const fmt = (b) => b >= G ? (b / G).toFixed(1) + " GiB" : (b / M).toFixed(1) + " MiB";
+let stack = [ROOT], view = "sun", scanned = false, sel = null;
+const cur = () => stack[stack.length - 1];
+const val = (n) => $("alloc").checked ? n.a : n.s;
+const color = (i, k, d) => `hsl(${Math.round(360 * i / k)} ${70 - d * 8}% ${d ? 72 : 68}%)`;
+const sorted = (n) => [...(n.c || [])].sort((a, b) => val(b) - val(a));
+function arc(r0, r1, a0, a1) {
+  const p = (r, a) => [210 + r * Math.sin(a), 210 - r * Math.cos(a)];
+  const big = a1 - a0 > Math.PI ? 1 : 0, [x0, y0] = p(r1, a0), [x1, y1] = p(r1, a1), [x2, y2] = p(r0, a1), [x3, y3] = p(r0, a0);
+  return `M${x0},${y0}A${r1},${r1} 0 ${big} 1 ${x1},${y1}L${x2},${y2}A${r0},${r0} 0 ${big} 0 ${x3},${y3}Z`;
+}
+function sunburst() {
+  const root = cur(), paths = [];
+  const top = sorted(root);
+  const tot = val(root) || 1; let a = 0;
+  top.forEach((k, i) => {
+    const span = 2 * Math.PI * val(k) / tot;
+    paths.push(`<path data-n="${esc(k.n)}" data-d="1" d="${arc(70, 113, a, a + span - 0.004)}" fill="${color(i, top.length, 0)}"><title>${esc(k.n)} · ${fmt(val(k))}</title></path>`);
+    const sub = (node, a0, a1, d, hue) => { if (d > 3 || !node.c) return; let b = a0; for (const q of sorted(node)) { const s = (a1 - a0) * val(q) / (val(node) || 1); if (s > 0.012) { paths.push(`<path data-n="${esc(q.n)}" data-d="${d}" d="${arc(70 + (d - 1) * 45, 70 + d * 45 - 2, b, b + s - 0.004)}" fill="${color(hue, top.length, d - 1)}"><title>${esc(q.n)} · ${fmt(val(q))}</title></path>`); sub(q, b, b + s, d + 1, hue); } b += s; } };
+    sub(k, a, a + span, 2, i); a += span;
+  });
+  return `<svg id="chart" viewBox="0 0 420 420" width="420" height="420" role="img" aria-label="Sunburst of ${esc(root.n)}">${paths.join("")}<circle cx="210" cy="210" r="66" fill="var(--w-bg)"/><text x="210" y="206" text-anchor="middle" fill="currentColor" font-size="14">${esc(root.n)}</text><text x="210" y="226" text-anchor="middle" fill="var(--w-dim)" font-size="12">${fmt(val(root))}</text></svg>`;
+}
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function treemap() {
+  const items = sorted(cur()), out = [];
+  const place = (list, x, y, w, h, flip) => {
+    if (!list.length) return;
+    if (list.length === 1) { out.push([list[0], x, y, w, h]); return; }
+    const tot = list.reduce((s, k) => s + val(k), 0); let acc = 0, i = 0;
+    while (i < list.length - 1 && acc + val(list[i]) < tot / 2) acc += val(list[i++]);
+    if (i === 0) i = 1; acc = list.slice(0, i).reduce((s, k) => s + val(k), 0);
+    const f = acc / tot;
+    if (flip) { place(list.slice(0, i), x, y, w * f, h, !flip); place(list.slice(i), x + w * f, y, w * (1 - f), h, !flip); }
+    else { place(list.slice(0, i), x, y, w, h * f, !flip); place(list.slice(i), x, y + h * f, w, h * (1 - f), !flip); }
+  };
+  place(items, 0, 0, 100, 100, true);
+  return `<div class="tm">${out.map(([k, x, y, w, h], i) => `<div role="button" tabindex="0" data-n="${esc(k.n)}" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%;background:${color(i, out.length, 0)}">${esc(k.n)}<small>${fmt(val(k))}</small></div>`).join("")}</div>`;
+}
+function dir() {
+  const tot = val(cur()) || 1;
+  return `<table class="list"><thead><tr><th>Name</th><th>Size</th><th style="width:30%">Share</th></tr></thead><tbody>${sorted(cur()).map((k) => `<tr tabindex="0" data-n="${esc(k.n)}"><td>${k.c ? "📁 " : ""}${esc(k.n)}</td><td>${fmt(val(k))}</td><td><div class="barcell" style="width:${Math.max(2, 100 * val(k) / tot)}%"></div></td></tr>`).join("")}</tbody></table>`;
+}
+function big() {
+  const files = []; (function walk(n) { for (const k of n.c || []) k.c ? walk(k) : files.push(k); })(ROOT);
+  files.sort((a, b) => val(b) - val(a));
+  return `<div class="bar" style="border:0;padding:0 0 8px"><input type="search" id="q" placeholder="Filename contains" aria-label="Filename contains" /><label class="muted">Minimum MiB <input type="text" id="min" value="0" size="5" /></label></div><div id="bigrows"></div>`;
+}
+function bigRows() {
+  const files = []; (function walk(n) { for (const k of n.c || []) k.c ? walk(k) : files.push(k); })(ROOT);
+  const q = ($("q")?.value || "").toLowerCase(), min = (parseFloat($("min")?.value) || 0) * M;
+  const rows = files.filter((f) => f.n.toLowerCase().includes(q) && val(f) >= min).sort((a, b) => val(b) - val(a));
+  $("bigrows").innerHTML = `<p class="muted">${rows.length} of ${files.length} files, largest first</p><table class="list"><tbody>${rows.slice(0, 40).map((k) => `<tr data-n="${esc(k.n)}" data-f="1"><td>${esc(k.n)}</td><td style="text-align:right">${fmt(val(k))}</td></tr>`).join("")}</tbody></table>`;
+}
+function render() {
+  if (!scanned) return;
+  $("path").value = "/home/" + stack.map((n) => n.n).join("/");
+  $("crumbs").innerHTML = stack.map((n, i) => `<button type="button" data-i="${i}">${esc(n.n)}</button>`).join(" / ");
+  $("up").disabled = stack.length < 2;
+  $("view").innerHTML = view === "sun" ? sunburst() : view === "tree" ? treemap() : view === "dir" ? dir() : big();
+  if (view === "big") { bigRows(); $("q").oninput = $("min").oninput = bigRows; }
+  const n = sel || cur();
+  $("info").innerHTML = `<strong>${esc(n.n)}</strong> · size ${fmt(n.s)} · allocated ${fmt(n.a)}${n.c ? " · " + n.c.length + " items" : ""}<br><span class="muted">Allocated size is an estimate and may not equal recoverable space.</span>`;
+}
+function open(name, isFile) {
+  const k = (cur().c || []).find((x) => x.n === name) || null;
+  if (!k) { if (isFile) { sel = findFile(name); render(); } return; }
+  if (k.c) { stack.push(k); sel = null; } else sel = k;
+  render();
+}
+function findFile(n) { let r; (function w(x) { for (const k of x.c || []) k.c ? w(k) : k.n === n && (r = k); })(ROOT); return r; }
+$("view").addEventListener("click", (e) => { const t = e.target.closest("[data-n]"); if (t) open(t.dataset.n, !!t.dataset.f); });
+$("view").addEventListener("keydown", (e) => { if (e.key === "Enter") { const t = e.target.closest("[data-n]"); if (t) open(t.dataset.n, !!t.dataset.f); } });
+$("crumbs").addEventListener("click", (e) => { const b = e.target.closest("[data-i]"); if (b) { stack = stack.slice(0, +b.dataset.i + 1); sel = null; render(); } });
+$("up").addEventListener("click", () => { if (stack.length > 1) { stack.pop(); sel = null; render(); } });
+$("alloc").addEventListener("change", render);
+document.querySelectorAll("[data-v]").forEach((b) => b.addEventListener("click", () => { view = b.dataset.v; document.querySelectorAll("[data-v]").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); render(); }));
+$("scan").addEventListener("click", async () => {
+  $("scan").disabled = true; scanned = false; stack = [ROOT]; sel = null;
+  let n = 0; for (let i = 0; i < 12; i++) { n += 4 + (i % 3); $("status").textContent = "Scanning… " + n + " entries"; await new Promise((r) => setTimeout(r, 120)); }
+  scanned = true; $("scan").disabled = false; $("status").textContent = "Scan finished: " + fmt(ROOT.s) + " in this folder · 56 entries scanned. Nothing was changed."; render();
+});
+$("up").disabled = true;
+
+})();</script>
     <style data-lightbox>
   .lb-trigger { cursor: zoom-in; }
   .lb-trigger:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
