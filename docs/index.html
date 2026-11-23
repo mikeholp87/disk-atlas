@@ -1,28 +1,43 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Disk Atlas: Linux Disk Usage Analyzer in Rust</title>
-<meta name="description" content="Disk Atlas is a free Linux disk usage analyzer in Rust. Sunburst and treemap views, a largest files list and read-only scans. Early development build.">
-<link rel="canonical" href="https://mikeholp87.github.io/disk-atlas/">
-<meta property="og:type" content="website">
-<meta property="og:title" content="Disk Atlas: a Linux disk usage analyzer with sunburst and treemap views">
-<meta property="og:description" content="Disk Atlas is a free, open source Linux disk usage analyzer written in Rust with egui and wgpu. Sunburst and treemap charts, a largest files view and read-only background scans.">
-<meta property="og:url" content="https://mikeholp87.github.io/disk-atlas/">
-<meta name="twitter:card" content="summary">
-<script type="application/ld+json">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#edeff5" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0f1117" media="(prefers-color-scheme: dark)" />
+    <title>Disk Atlas: Linux Disk Usage Analyzer in Rust</title>
+    <meta name="description" content="Disk Atlas is a free Linux disk usage analyzer in Rust. Sunburst and treemap views, a largest files list and read-only scans. Early development build." />
+    <link rel="canonical" href="https://mikeholp87.github.io/disk-atlas/" />
+    <link rel="icon" href="./disk-atlas-icon.svg" type="image/svg+xml" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Disk Atlas" />
+    <meta property="og:title" content="Disk Atlas: Linux Disk Usage Analyzer in Rust" />
+    <meta property="og:description" content="A free, open source Linux disk usage analyzer written in Rust. Sunburst and treemap charts, a largest files view and read-only background scans." />
+    <meta property="og:url" content="https://mikeholp87.github.io/disk-atlas/" />
+    <meta property="og:image" content="https://mikeholp87.github.io/disk-atlas/assets/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Disk Atlas showing a sunburst chart of a sample folder next to a list of its directories" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Disk Atlas: Linux Disk Usage Analyzer in Rust" />
+    <meta name="twitter:description" content="A free, open source Linux disk usage analyzer written in Rust. Sunburst and treemap charts, a largest files view and read-only background scans." />
+    <meta name="twitter:image" content="https://mikeholp87.github.io/disk-atlas/assets/og.png" />
+    <meta name="twitter:image:alt" content="Disk Atlas showing a sunburst chart of a sample folder next to a list of its directories" />
+    <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
   "name": "Disk Atlas",
-  "description": "Disk Atlas is a free, open source Linux disk usage analyzer written in Rust with egui and wgpu. Sunburst and treemap charts, a largest files view and read-only background scans.",
-  "url": "https://mikeholp87.github.io/disk-atlas/",
+  "description": "A free, open source disk usage analyzer for Linux written in Rust with egui and wgpu, with sunburst and treemap charts and a largest files view.",
   "applicationCategory": "UtilitiesApplication",
   "operatingSystem": "Linux",
   "programmingLanguage": "Rust",
+  "url": "https://mikeholp87.github.io/disk-atlas/",
   "codeRepository": "https://github.com/mikeholp87/disk-atlas",
+  "downloadUrl": "https://github.com/mikeholp87/disk-atlas",
   "license": "https://opensource.org/license/mit",
+  "isAccessibleForFree": true,
   "offers": {
     "@type": "Offer",
     "price": "0",
@@ -37,72 +52,877 @@
       "https://www.ai-automation-station.com/"
     ]
   },
-  "dateModified": "2026-11-22"
+  "dateModified": "2026-11-23"
 }
-</script>
-<style>
-  :root { --bg: #fafafa; --fg: #1c1c22; --muted: #62626e; --card: #fff; --line: #e3e3ea; --accent: #3b5bdb; }
-  @media (prefers-color-scheme: dark) { :root { --bg: #15151a; --fg: #ececf1; --muted: #9a9aa8; --card: #1e1e25; --line: #2e2e38; --accent: #8da9ff; } }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 system-ui, sans-serif; }
-  main { max-width: 46rem; margin: 0 auto; padding: 3rem 1rem 2rem; }
-  h1 { margin: 0 0 .5rem; font-size: 2.2rem; }
-  h2 { margin-top: 2.2rem; }
-  a { color: var(--accent); }
-  .lead { font-size: 1.15rem; color: var(--muted); }
-  pre { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 1rem; overflow-x: auto; }
-  .note { border-left: 3px solid var(--accent); padding: .1rem 1rem; color: var(--muted); }
-  footer { max-width: 46rem; margin: 0 auto; padding: 1rem 1rem 3rem; color: var(--muted); font-size: .9rem; border-top: 1px solid var(--line); }
-  footer a { margin-right: 1rem; }
-table { width: 100%; border-collapse: collapse; font-size: .92rem; }
-th, td { padding: .6rem .7rem; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
-th { color: var(--muted); font-size: .8rem; text-transform: uppercase; }
-td:first-child { font-weight: 650; }
-.table-wrap { overflow-x: auto; background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
+    </script>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #edeff5;
+        --paper: #fff;
+        --soft: #f6f7fb;
+        --ink: #14161f;
+        --muted: #4b5167;
+        --line: #d9ddea;
+        --blue: #4350e0;
+        --blue-ink: #3641c4;
+        --on-blue: #fff;
+        --green: #066a4a;
+        --amber: #8a5a00;
+        --code-bg: #171a26;
+        --code-ink: #e8eaf4;
+        --shadow: 0 24px 60px -28px rgba(20, 22, 31, 0.35);
+        font-family:
+          Inter,
+          "Segoe UI",
+          system-ui,
+          -apple-system,
+          sans-serif;
+        color: var(--ink);
+        background: var(--bg);
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+        scroll-behavior: smooth;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0f1117;
+          --paper: #171a23;
+          --soft: #1b1f2a;
+          --ink: #eef0f7;
+          --muted: #a9afc4;
+          --line: #2a2f3d;
+          --blue: #8b95ff;
+          --blue-ink: #a3abff;
+          --on-blue: #0f1117;
+          --green: #4cd3a1;
+          --amber: #f2c46d;
+          --code-bg: #0a0c12;
+          --shadow: 0 24px 60px -28px rgba(0, 0, 0, 0.8);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        :root {
+          scroll-behavior: auto;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-width: 320px;
+      }
+      a {
+        color: var(--blue-ink);
+        text-underline-offset: 0.2em;
+      }
+      a:focus-visible,
+      button:focus-visible,
+      summary:focus-visible {
+        outline: 3px solid var(--blue);
+        outline-offset: 3px;
+        border-radius: 4px;
+      }
+      .skip {
+        position: absolute;
+        left: 12px;
+        top: -60px;
+        z-index: 10;
+        padding: 10px 14px;
+        border-radius: 8px;
+        background: var(--blue);
+        color: var(--on-blue);
+        font-weight: 700;
+        text-decoration: none;
+      }
+      .skip:focus {
+        top: 12px;
+      }
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+      .wrap {
+        width: min(1080px, calc(100% - 40px));
+        margin: auto;
+      }
+      header {
+        height: 84px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--line);
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: var(--ink);
+        font-size: 20px;
+        font-weight: 750;
+        letter-spacing: -0.03em;
+        text-decoration: none;
+      }
+      .brand img {
+        width: 36px;
+        height: 36px;
+        border-radius: 9px;
+      }
+      .nav {
+        display: flex;
+        align-items: center;
+        gap: 22px;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .nav a {
+        color: var(--ink);
+        text-decoration: none;
+      }
+      .nav a:hover {
+        color: var(--blue-ink);
+        text-decoration: underline;
+      }
+      .nav .pill {
+        padding: 8px 14px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--paper);
+      }
+      main {
+        padding-top: 56px;
+      }
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+        gap: 56px;
+        align-items: center;
+        padding: 24px 0 72px;
+      }
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 18px;
+        color: var(--green);
+        font-size: 13px;
+        font-weight: 750;
+      }
+      .eyebrow::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+      h1 {
+        margin: 0;
+        font-size: clamp(40px, 5.6vw, 68px);
+        line-height: 1;
+        letter-spacing: -0.055em;
+      }
+      .lead {
+        max-width: 34em;
+        margin: 22px 0 0;
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1.65;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 28px;
+      }
+      .button {
+        display: inline-flex;
+        align-items: center;
+        min-height: 46px;
+        padding: 0 20px;
+        border: 1px solid var(--blue);
+        border-radius: 8px;
+        background: var(--blue);
+        color: var(--on-blue);
+        font-size: 15px;
+        font-weight: 750;
+        text-decoration: none;
+      }
+      .button:hover {
+        filter: brightness(1.08);
+      }
+      .button.secondary {
+        border-color: var(--line);
+        background: var(--paper);
+        color: var(--ink);
+      }
+      .badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 26px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      .badges li {
+        padding: 5px 11px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--paper);
+        color: var(--muted);
+        font-size: 12.5px;
+        font-weight: 650;
+      }
+      .badges .preview {
+        color: var(--amber);
+      }
+      .shot {
+        margin: 0;
+      }
+      .shot img {
+        display: block;
+        width: 100%;
+        height: auto;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--paper);
+        box-shadow: var(--shadow);
+      }
+      .shot figcaption {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 12.5px;
+      }
+      section {
+        scroll-margin-top: 24px;
+      }
+      .section-head {
+        max-width: 640px;
+        margin-bottom: 32px;
+      }
+      h2 {
+        margin: 0;
+        font-size: clamp(26px, 3.2vw, 36px);
+        letter-spacing: -0.04em;
+        line-height: 1.1;
+      }
+      .section-head p {
+        margin: 12px 0 0;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.65;
+      }
+      .features,
+      .shots,
+      .platforms,
+      .faq,
+      .safety {
+        padding: 72px 0 0;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 16px;
+      }
+      .card {
+        padding: 22px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--paper);
+      }
+      .card h3 {
+        margin: 0 0 8px;
+        font-size: 16px;
+        letter-spacing: -0.02em;
+      }
+      .card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.6;
+      }
+      .card .tag {
+        display: inline-block;
+        margin-top: 12px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: var(--soft);
+        color: var(--muted);
+        font-size: 11.5px;
+        font-weight: 700;
+      }
+      .shots-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 24px;
+      }
+      .table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--paper);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      th,
+      td {
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      tr:last-child td {
+        border-bottom: 0;
+      }
+      td {
+        color: var(--muted);
+        line-height: 1.55;
+      }
+      td:first-child {
+        color: var(--ink);
+        font-weight: 650;
+      }
+      .install {
+        margin-top: 72px;
+        padding: 40px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--paper);
+      }
+      .install > .section-head {
+        margin-bottom: 24px;
+      }
+      .steps {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 22px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        counter-reset: step;
+      }
+      .steps > li {
+        position: relative;
+        padding-left: 46px;
+        counter-increment: step;
+      }
+      .steps > li::before {
+        content: counter(step);
+        position: absolute;
+        left: 0;
+        top: -2px;
+        display: grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        background: var(--blue);
+        color: var(--on-blue);
+        font-size: 14px;
+        font-weight: 800;
+      }
+      .steps h3 {
+        margin: 0 0 6px;
+        font-size: 16px;
+        letter-spacing: -0.02em;
+      }
+      .steps p {
+        margin: 0 0 10px;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.6;
+      }
+      .fp {
+        display: block;
+        margin: 0 0 10px;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--soft);
+        color: var(--ink);
+        font:
+          600 13px/1.5 ui-monospace,
+          "SFMono-Regular",
+          Menlo,
+          Consolas,
+          monospace;
+        overflow-wrap: anywhere;
+      }
+      .codebox {
+        position: relative;
+      }
+      .code {
+        margin: 0;
+        padding: 20px 76px 20px 20px;
+        overflow-x: auto;
+        border-radius: 10px;
+        background: var(--code-bg);
+        color: var(--code-ink);
+        font:
+          13px/1.7 ui-monospace,
+          "SFMono-Regular",
+          Menlo,
+          Consolas,
+          monospace;
+        tab-size: 2;
+      }
+      .copy {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        min-height: 32px;
+        padding: 0 12px;
+        border: 1px solid rgba(255, 255, 255, 0.22);
+        border-radius: 6px;
+        background: rgba(255, 255, 255, 0.08);
+        color: #e8eaf4;
+        font: 700 12px/1 inherit;
+        cursor: pointer;
+      }
+      .copy:hover {
+        background: rgba(255, 255, 255, 0.16);
+      }
+      .fine {
+        margin: 10px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.6;
+      }
+      .fine code,
+      .steps p code,
+      .card p code,
+      details p code {
+        font:
+          12.5px ui-monospace,
+          "SFMono-Regular",
+          Menlo,
+          Consolas,
+          monospace;
+      }
+      .safety-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+      details {
+        border-bottom: 1px solid var(--line);
+      }
+      details:first-of-type {
+        border-top: 1px solid var(--line);
+      }
+      summary {
+        padding: 18px 4px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+      }
+      details p {
+        max-width: 70ch;
+        margin: 0 0 18px;
+        padding: 0 4px;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.7;
+      }
+      footer {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 12px 24px;
+        margin-top: 80px;
+        padding: 24px 0 36px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 13px;
+      }
+      footer nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 20px;
+      }
+      @media (max-width: 960px) {
+        .grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+      @media (max-width: 760px) {
+        .wrap {
+          width: min(100% - 32px, 540px);
+        }
+        header {
+          height: 70px;
+        }
+        .nav {
+          gap: 14px;
+          font-size: 13px;
+        }
+        .nav .hide-sm {
+          display: none;
+        }
+        main {
+          padding-top: 32px;
+        }
+        .hero {
+          grid-template-columns: 1fr;
+          gap: 32px;
+          padding: 12px 0 48px;
+        }
+        .features,
+        .shots,
+        .platforms,
+        .faq,
+        .safety {
+          padding-top: 52px;
+        }
+        .grid,
+        .shots-grid,
+        .safety-grid {
+          grid-template-columns: 1fr;
+        }
+        .install {
+          margin-top: 52px;
+          padding: 24px 18px;
+        }
+        .steps > li {
+          padding-left: 0;
+          padding-top: 40px;
+        }
+        .steps > li::before {
+          top: 0;
+        }
+        .code {
+          font-size: 12px;
+        }
+      }
+    
+      .shot img.shot-small {
+        max-height: 560px;
+        object-fit: contain;
+      }
 </style>
-</head>
-<body>
-<main>
-<h1>Disk Atlas</h1>
-<p class="lead">A free, open source disk usage analyzer for Linux, written in Rust with egui and wgpu. See which folders and files take the space, in a sunburst, a treemap or a plain directory list.</p>
-<p><a href="https://github.com/mikeholp87/disk-atlas">View the source on GitHub</a></p>
-<h2>What is Disk Atlas?</h2>
-<p>Disk Atlas is a free, open source disk usage analyzer for Linux, written in Rust with egui and wgpu. It scans a folder on a background thread without modifying anything and shows where the space went in three views: a three-ring sunburst, a treemap of the current directory and a plain directory list. A Largest Files view ranks regular files across the whole scan with filename search and a minimum-size filter, using either apparent or allocated size. The left panel lists mounted volumes with their capacity and lets you exclude folders from the next scan, and the scanner does not cross into other devices or mount points. Themes include system, light, dark and high contrast, and the app runs on both Wayland and X11. Disk Atlas uses the MIT license and is an early development build: pause and resume, cleanup actions and installable packages are not finished yet.</p>
-<p><small>Updated November 22, 2026</small></p>
-<h2>Features</h2>
-<ul>
-<li>Read-only background scan with cancellation and a live entry count</li>
-<li>Three-ring sunburst, a treemap of the current folder and a virtualized directory list</li>
-<li>Largest Files view with filename search and minimum-size filters, using apparent or allocated size</li>
-<li>Mounted volumes with capacity, folder exclusions, and light, dark and high contrast themes</li>
-<li>Works on Wayland and X11; does not cross into other devices or mount points</li>
-</ul>
-<h2>How does Disk Atlas compare with other Linux disk usage analyzers?</h2>
-<p>Disk Atlas is an early build, so it fits people who want to try a new analyzer, not those who need a packaged tool today.</p>
-<div class="table-wrap">
-<table>
-<thead><tr><th scope="col">Tool</th><th scope="col">Type</th><th scope="col">Good fit when</th></tr></thead>
-<tbody>
-<tr><td>Disk Atlas</td><td>Rust desktop app (egui and wgpu)</td><td>You want sunburst, treemap and largest-files views in one read-only scan. Early build, run from source, no cleanup actions yet.</td></tr>
-<tr><td>Filelight</td><td>KDE desktop app</td><td>You use KDE and want concentric ring charts from a packaged app.</td></tr>
-<tr><td>Disk Usage Analyzer (Baobab)</td><td>GNOME desktop app</td><td>You use GNOME and want ring and treemap charts that are already installed.</td></tr>
-<tr><td>ncdu</td><td>Terminal program</td><td>You work over SSH and want a fast, text-only directory list.</td></tr>
-</tbody>
-</table>
-</div>
-<h2>Run it</h2>
-<pre>git clone https://github.com/mikeholp87/disk-atlas
-cd disk-atlas
-cargo run -p diskatlas</pre>
-<p>Needs Rust 1.96 or newer and a Linux desktop with working graphics drivers. Pass a folder, for example <code>diskatlas ~/Downloads</code>, to start scanning immediately.</p>
-<h2>Status</h2>
-<p class="note">Early development build. Pause and resume, name-pattern exclusions, cleanup and installable packages are not finished, and desktop interaction has not been verified across KDE, GNOME, Wayland and X11.</p>
-<h2>Related</h2>
-<p>Other projects by the same author: <a href="https://mikeholp87.github.io/Tasky/">Tasky</a>, <a href="https://mikeholp87.github.io/Luma-Launcher/">Luma Launcher</a>, <a href="https://mikeholp87.github.io/Restic-Studio/">Restic Studio</a> and <a href="https://mikeholp87.github.io/">all projects</a>.</p>
-</main>
-<footer>
-<p>Disk Atlas is free and open source under the MIT license. Built by Mike Holp.</p>
-<a href="https://github.com/mikeholp87/disk-atlas">GitHub</a><a href="https://github.com/mikeholp87/disk-atlas/issues">Issues</a><a href="https://github.com/mikeholp87/disk-atlas/blob/main/LICENSE">License</a><a href="https://www.ai-automation-station.com/guides.html">Build guides</a><a href="https://www.ai-automation-station.com/">AI Automation Station</a>
-</footer>
-</body>
+  </head>
+  <body>
+    <a class="skip" href="#content">Skip to content</a>
+    <div class="wrap">
+      <header>
+        <a class="brand" href="./" aria-label="Disk Atlas home"
+          ><img src="./disk-atlas-icon.svg" alt="" width="36" height="36" />Disk Atlas</a
+        >
+        <nav class="nav" aria-label="Main navigation">
+          <a class="hide-sm" href="#features">Features</a>
+          <a class="hide-sm" href="#screenshots">Screenshots</a>
+          <a href="#install">Install</a>
+          <a class="hide-sm" href="#faq">FAQ</a>
+          <a class="pill" href="https://github.com/mikeholp87/disk-atlas">GitHub</a>
+        </nav>
+      </header>
+      <main id="content">
+        <section class="hero" aria-labelledby="hero-title">
+          <div>
+            <div class="eyebrow">Free and open source disk usage analyzer for Linux</div>
+            <h1 id="hero-title">Find out where your disk space went.</h1>
+            <p class="lead">Disk Atlas scans a folder in the background without changing anything, then shows what takes the space as a sunburst, a treemap or a plain directory list, with a Largest Files view across the whole scan.</p>
+            <div class="actions">
+              <a class="button" href="#install">Run it from source</a>
+              <a class="button secondary" href="https://github.com/mikeholp87/disk-atlas">View source</a>
+            </div>
+            <ul class="badges" aria-label="Highlights">
+              <li>MIT licensed</li>
+              <li>Read-only scans</li>
+              <li>Rust, egui and wgpu</li>
+              <li>Wayland and X11</li>
+              <li class="preview">Early build</li>
+            </ul>
+          </div>
+          <figure class="shot">
+            <picture>
+              <source type="image/webp" srcset="./assets/hero-640.webp 640w, ./assets/hero-1280.webp 1280w" sizes="(max-width: 760px) calc(100vw - 32px), 580px" />
+              <img src="./assets/hero-1280.webp" width="1280" height="887" fetchpriority="high" alt="Disk Atlas showing a sunburst chart of a sample home folder with a list of its directories and sizes" />
+            </picture>
+            <figcaption>The sunburst view after scanning a sample folder.</figcaption>
+          </figure>
+        </section>
+
+        <section id="about" class="faq" aria-labelledby="about-title">
+          <div class="section-head">
+            <h2 id="about-title">What is Disk Atlas?</h2>
+            <p>Disk Atlas is a free, open source disk usage analyzer for Linux, written in Rust with egui and wgpu. It scans a folder on a background thread without modifying anything and shows where the space went in three views: a three-ring sunburst, a treemap of the current directory and a plain directory list. A Largest Files view ranks regular files across the whole scan with filename search and a minimum-size filter, using either apparent or allocated size. The left panel lists mounted volumes with their capacity and lets you exclude folders from the next scan, and the scanner does not cross into other devices or mount points. Themes include system, light, dark and high contrast, and the app runs on both Wayland and X11. Disk Atlas uses the MIT license and is an early development build: pause and resume, cleanup actions and installable packages are not finished yet.</p>
+            <p class="fine">Updated November 23, 2026</p>
+          </div>
+        </section>
+
+        <section id="features" class="features" aria-labelledby="features-title">
+          <div class="section-head">
+            <h2 id="features-title">Everything you need to see what is using space</h2>
+            <p>Disk Atlas answers one question well: which folders and files are taking the room. It never deletes or moves anything.</p>
+          </div>
+          <div class="grid">
+            <article class="card">
+              <h3>Background scan</h3>
+              <p>A read-only scan with cancellation and a live entry count, so the window stays responsive.</p>
+            </article>
+            <article class="card">
+              <h3>Sunburst</h3>
+              <p>Three rings colored by angle. Click a folder to open it, a file to select it, or the center to go up.</p>
+            </article>
+            <article class="card">
+              <h3>Treemap</h3>
+              <p>A treemap of the current folder that shows the immediate children by size.</p>
+            </article>
+            <article class="card">
+              <h3>Directory list</h3>
+              <p>A virtualized list with sizes. Double-click a folder to enter it. Empty and zero-size entries stay available.</p>
+            </article>
+            <article class="card">
+              <h3>Largest files</h3>
+              <p>Rank regular files across the whole scan with a filename search and a minimum size, by apparent or allocated size.</p>
+            </article>
+            <article class="card">
+              <h3>Mounted volumes</h3>
+              <p>The left panel lists volumes with their capacity and lets you exclude folders from the next scan.</p>
+            </article>
+            <article class="card">
+              <h3>Themes</h3>
+              <p>System, light, dark and high contrast, a size control and a reduce-motion option, all saved between runs.</p>
+            </article>
+            <article class="card">
+              <h3>Keyboard and screen readers</h3>
+              <p>Arrow keys move through charts and lists, and an AccessKit tree exposes names and roles to assistive technology.</p>
+            </article>
+          </div>
+        </section>
+
+        <section id="screenshots" class="shots" aria-labelledby="shots-title">
+          <div class="section-head">
+            <h2 id="shots-title">Three views of the same scan</h2>
+            <p>Switch between sunburst, treemap and directory with one click. Chart colors are the same in every theme.</p>
+          </div>
+          <div class="shots-grid">
+            <figure class="shot">
+              <picture>
+              <source type="image/webp" srcset="./assets/shot-a-640.webp 640w, ./assets/shot-a-1280.webp 1280w" sizes="(max-width: 760px) calc(100vw - 32px), 528px" />
+              <img src="./assets/shot-a-640.webp" width="640" height="443" loading="lazy" alt="Disk Atlas treemap of a sample folder" />
+            </picture>
+              <figcaption>Treemap of the open folder (sample data).</figcaption>
+            </figure>
+            <figure class="shot">
+              <picture>
+              <source type="image/webp" srcset="./assets/shot-b-640.webp 640w, ./assets/shot-b-1280.webp 1280w" sizes="(max-width: 760px) calc(100vw - 32px), 528px" />
+              <img src="./assets/shot-b-640.webp" width="640" height="443" loading="lazy" alt="Disk Atlas Largest Files view listing the biggest files in a sample folder" />
+            </picture>
+              <figcaption>Largest Files view with a size filter (sample data).</figcaption>
+            </figure>
+          </div>
+        </section>
+
+        <section id="compare" class="platforms" aria-labelledby="compare-title">
+          <div class="section-head">
+            <h2 id="compare-title">How does Disk Atlas compare with other Linux disk usage analyzers?</h2>
+            <p>Disk Atlas is an early build, so it fits people who want to try a new analyzer, not those who need a packaged tool today.</p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Tool</th>
+                  <th scope="col">Type</th>
+                  <th scope="col">Good fit when</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Disk Atlas</td>
+                  <td>Rust desktop app (egui and wgpu)</td>
+                  <td>You want sunburst, treemap and largest-files views in one read-only scan. Early build, run from source, no cleanup actions yet.</td>
+                </tr>
+                <tr>
+                  <td>Filelight</td>
+                  <td>KDE desktop app</td>
+                  <td>You use KDE and want concentric ring charts from a packaged app.</td>
+                </tr>
+                <tr>
+                  <td>Disk Usage Analyzer (Baobab)</td>
+                  <td>GNOME desktop app</td>
+                  <td>You use GNOME and want ring and treemap charts that are already installed.</td>
+                </tr>
+                <tr>
+                  <td>ncdu</td>
+                  <td>Terminal program</td>
+                  <td>You work over SSH and want a fast, text-only directory list.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="platforms" class="platforms" aria-labelledby="platforms-title">
+          <div class="section-head">
+            <h2 id="platforms-title">Supported platforms and limits</h2>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Area</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Linux desktop</td>
+                  <td>Wayland and X11 with working graphics drivers. Desktop interaction has not been verified across KDE, GNOME, Wayland and X11.</td>
+                </tr>
+                <tr>
+                  <td>Scanning</td>
+                  <td>Does not cross into other devices or mount points, and follows a symlink only when it is the scan root. Extra hard links add 0 bytes.</td>
+                </tr>
+                <tr>
+                  <td>Btrfs</td>
+                  <td>Shows a warning that snapshots, shared data and compression make sizes approximate. It does not enter nested subvolumes.</td>
+                </tr>
+                <tr>
+                  <td>Packaging</td>
+                  <td>Not in a package repository yet. Build from source with Rust 1.96 or newer, or build a .deb with the script in the repository.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="install" class="install" aria-labelledby="install-title">
+          <div class="section-head">
+            <h2 id="install-title">Run it from source</h2>
+            <p>Disk Atlas is an early development build. You need Rust 1.96 or newer and a Linux desktop with working graphics drivers.</p>
+          </div>
+          <ol class="steps">
+            <li>
+              <h3>Get the source</h3>
+              <div class="codebox">
+                <pre class="code" tabindex="0"><code>sudo apt install git build-essential
+git clone https://github.com/mikeholp87/disk-atlas
+cd disk-atlas</code></pre>
+              </div>
+            </li>
+            <li>
+              <h3>Run it</h3>
+              <div class="codebox">
+                <pre class="code" tabindex="0"><code>cargo run --release -p diskatlas</code></pre>
+              </div>
+              <p class="fine">Enter a folder and choose Scan. Pass a folder, for example <code>diskatlas ~/Downloads</code>, to start scanning at once.</p>
+            </li>
+            <li>
+              <h3>Optional: build a Debian package</h3>
+              <div class="codebox">
+                <pre class="code" tabindex="0"><code>packaging/build-deb.sh
+sudo apt install ./target/deb/diskatlas_*.deb</code></pre>
+              </div>
+              <p class="fine">Installs the binary, desktop entry, icon, AppStream metadata and the <code>man diskatlas</code> page. The package needs the glibc of the machine it was built on.</p>
+            </li>
+          </ol>
+        </section>
+
+        <section id="safety" class="safety" aria-labelledby="safety-title">
+          <div class="section-head">
+            <h2 id="safety-title">Read-only by design</h2>
+          </div>
+          <div class="safety-grid">
+            <article class="card">
+              <h3>Never changes your files</h3>
+              <p>Disk Atlas only reads metadata. There are no cleanup, delete or move actions.</p>
+            </article>
+            <article class="card">
+              <h3>Honest about size</h3>
+              <p>Allocated size includes directory metadata and may count shared storage more than once. It is not a recoverable-space estimate.</p>
+            </article>
+            <article class="card">
+              <h3>Stays on one device</h3>
+              <p>The scanner never descends into another device or into any mount point listed in <code>/proc/self/mountinfo</code>.</p>
+            </article>
+          </div>
+        </section>
+
+        <section id="faq" class="faq" aria-labelledby="faq-title">
+          <div class="section-head">
+            <h2 id="faq-title">Questions</h2>
+          </div>
+          <details>
+            <summary>Can Disk Atlas delete files?</summary>
+            <p>No. It only reads metadata. Cleanup actions are not built, so use your file manager once you know what to remove.</p>
+          </details>
+          <details>
+            <summary>What is the difference between apparent and allocated size?</summary>
+            <p>Apparent size is the length of a file. Allocated size is what the filesystem reserves for it, which can be larger or, for sparse files, smaller.</p>
+          </details>
+          <details>
+            <summary>Why are mounted drives shown as empty?</summary>
+            <p>The scanner does not cross into other devices or mount points, so a mount inside your scan appears as an empty leaf. Scan that drive directly.</p>
+          </details>
+          <details>
+            <summary>Where are my settings stored?</summary>
+            <p>In <code>settings.conf</code> under <code>$XDG_CONFIG_HOME/diskatlas</code>, which is <code>~/.config/diskatlas</code> by default.</p>
+          </details>
+          <details>
+            <summary>Where do I report a bug?</summary>
+            <p>Open an issue on <a href="https://github.com/mikeholp87/disk-atlas/issues">GitHub</a>.</p>
+          </details>
+        </section>
+      </main>
+      <footer>
+        <span>Disk Atlas is free and open source under the MIT license. Built by Mike Holp.</span>
+        <nav aria-label="Footer">
+          <a href="https://github.com/mikeholp87/disk-atlas">GitHub</a>
+          <a href="https://github.com/mikeholp87/disk-atlas/issues">Issues</a>
+          <a href="https://github.com/mikeholp87/disk-atlas/blob/main/LICENSE">License</a>
+          <a href="https://github.com/mikeholp87/disk-atlas/blob/main/README.md">README</a>
+          <a href="https://www.ai-automation-station.com/guides.html">Build guides</a>
+          <a href="https://www.ai-automation-station.com/">AI Automation Station</a>
+        </nav>
+        <nav aria-label="Other projects">
+          <a href="https://mikeholp87.github.io/Tasky/">Tasky</a>
+          <a href="https://mikeholp87.github.io/Luma-Launcher/">Luma Launcher</a>
+          <a href="https://mikeholp87.github.io/Restic-Studio/">Restic Studio</a>
+          <a href="https://mikeholp87.github.io/">All projects</a>
+        </nav>
+      </footer>
+    </div>
+    <p id="copy-status" class="visually-hidden" role="status" aria-live="polite"></p>
+    <script>
+      var copyStatus = document.getElementById("copy-status");
+      document.querySelectorAll(".codebox").forEach(function (box) {
+        var code = box.querySelector("code");
+        if (!code || !navigator.clipboard) return;
+        var button = document.createElement("button");
+        button.type = "button";
+        button.className = "copy";
+        button.textContent = "Copy";
+        button.setAttribute("aria-label", "Copy commands to clipboard");
+        button.addEventListener("click", function () {
+          navigator.clipboard.writeText(code.textContent).then(function () {
+            button.textContent = "Copied";
+            copyStatus.textContent = "Commands copied to clipboard";
+            setTimeout(function () {
+              button.textContent = "Copy";
+              copyStatus.textContent = "";
+            }, 1800);
+          });
+        });
+        box.appendChild(button);
+      });
+    </script>
+  </body>
 </html>
