@@ -1,5 +1,9 @@
 # diskatlas
 
+[![License](https://img.shields.io/github/license/mikeholp87/disk-atlas)](https://github.com/mikeholp87/disk-atlas/blob/main/LICENSE)
+
+**Website:** <https://mikeholp87.github.io/disk-atlas/>
+
 A Linux disk usage analyzer written in Rust with egui/eframe and wgpu.
 
 This is an early development build. It supports a background, read-only scan,
